@@ -1,3 +1,3 @@
-from app.setup import setup
+from app.database import setup
 
 setup()
