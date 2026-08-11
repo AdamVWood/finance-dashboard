@@ -2,7 +2,7 @@ import sqlite3
 import datetime
 
 def add_transaction():
-    conn = sqlite3.connect('finance.db')
+    conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
     # Amount: must be a positive number
     while True:
@@ -81,7 +81,7 @@ def add_transaction():
 
     created_at = datetime.datetime.today().strftime("%Y-%m-%d")
 
-    c.execute('''INSERT INTO finance (amount, transaction_type, category_id, description, date, created_at)
+    c.execute('''INSERT INTO transactions (amount, transaction_type, category_id, description, date, created_at)
                                      VALUES (?, ?, ?, ?, ?, ?)''',
               (amount, transaction_type, category, description, date, created_at))  # enters the data
     conn.commit()
@@ -89,9 +89,11 @@ def add_transaction():
 
 
 def view_transactions():
-    conn = sqlite3.connect('finance.db')
+    conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
-
+    c.execute("""SELECT t.amount, t.transaction_type, category_id, t.description, t.date, t.created_at
+                  FROM transaction t
+                  INNER JOIN categories c ON t.category_id = c.id""")
     c.execute("SELECT * FROM finance")
     rows = c.fetchall()
 
@@ -107,71 +109,156 @@ def view_transactions():
     conn.close()
 
 
-def update_transactions():
-    conn = sqlite3.connect('finance.db')
-    c = conn.cursor()
-    print("\n==== Update Transaction ====\n")
-
-    # Ask for ID and validate
-    while True:
-        try:
-            unique_id = int(input("Enter the ID of the transaction you want to update: "))
-
-            c.execute("SELECT unique_ID FROM finance WHERE unique_ID = ?", (unique_id,))
-            result = c.fetchone()
-
-            if result is None:
-                print("Invalid ID. Transaction does not exist.\n")
-                continue
-
-            break
-
-        except ValueError:
-            print("Invalid input. Please enter a valid number.")
-
-    # Get old amount
-    c.execute("SELECT Amount FROM finance WHERE unique_ID = ?", (unique_id,))
-    old_amount = c.fetchone()[0]
-    print("\nOld amount:", old_amount)
-    # Get new amount
-    while True:
-        try:
-            new_amount = float(input("Enter the new amount: "))
-            if new_amount <= 0:
-                print("New amount must be greater than 0.")
-                continue
-            break
-        except ValueError:
-            print("Invalid amount. Please enter a number.")
-    # Update database
-    c.execute(
-        "UPDATE finance SET Amount = ? WHERE unique_ID = ?",
-        (new_amount, unique_id)
-    )
-    print("\nTransaction updated.")
-    conn.commit()
-    conn.close()
-
-
-def delete_transactions():
-    conn = sqlite3.connect('finance.db')
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM finance")
-    # Ask for ID and validate
-    while True:
-        try:
-            unique_id = int(input("Enter the ID of the transaction you want to delete: "))
-            c.execute("SELECT unique_ID FROM finance WHERE unique_ID = ?", (unique_id,))
-            result = c.fetchone()
-            if result is None:
-                print("Invalid ID. Transaction does not exist.\n")
-                continue
-            break
-
-        except ValueError:
-            print("Invalid input. Please enter a valid number.")
-
-    c.execute("DELETE FROM finance WHERE unique_ID = ?", (unique_id,))
-    print("\nTransaction deleted.")
-    conn.commit()
-    conn.close()
+#continue from here
+# def inventory_actions():
+#     conn = sqlite3.connect("inventory.db")
+#     c = conn.cursor()
+#     while True:
+#         try:
+#             choice = int(input("Would you like to:\n"
+#                                "1: Update Stock\n"
+#                                "2: Remove Stock\n"
+#                                "3: Search Products\n"))
+#             if choice < 1 or choice > 3:
+#                 print("Please enter a number between 1 and 3")
+#                 continue
+#             elif choice == 1:
+#                 while True:
+#                     product_name = input("What is the name of the product you want to update: ")
+#                     if product_name:
+#                         break
+#                     else:
+#                         print("Please enter a valid product name.")
+#                 while True:
+#                     try:
+#                         added_quantity = int(input("What is the quantity of the product you want to add: "))
+#                         if added_quantity >= 0:
+#                             c.execute("UPDATE products SET quantity = quantity + ? WHERE name = ?",
+#                                       (added_quantity, product_name))
+#                             conn.commit()
+#                             break   # removed conn.close() here
+#                         else:
+#                             print("Please enter a positive number")
+#                     except ValueError:
+#                         print("Please enter a positive number")
+#             elif choice == 2:
+#                 while True:
+#                     product_name = input("What is the name of the product you want to delete: ")
+#                     if product_name:
+#                         break
+#                     else:
+#                         print("Please enter a valid product name.")
+#                 while True:
+#                     try:
+#                         deleted_quantity = int(input("What is the quantity of the product you want to delete: "))
+#                         if deleted_quantity >= 0:
+#                             # Fetch current stock
+#                             c.execute("SELECT quantity FROM products WHERE name = ?", (product_name,))
+#                             row = c.fetchone()
+#                             if row is None:
+#                                 print("Product not found.")
+#                                 break
+#                             current_quantity = row[0]
+#                             if deleted_quantity > current_quantity:
+#                                 print("Cannot remove more stock than available.")
+#                                 continue
+#                             # Safe to update
+#                             c.execute("UPDATE products SET quantity = quantity - ? WHERE name = ?",
+#                                       (deleted_quantity, product_name))
+#                             conn.commit()
+#                             break
+#                         else:
+#                             print("Please enter a positive number")
+#                     except ValueError:
+#                         print("Please enter a positive number")
+#             elif choice == 3:
+#                 while True:
+#                     product_name = input("What is the name of the product you want to search: ")
+#                     if product_name:
+#                         break
+#                     else:
+#                         print("Please enter a valid product name.")
+#                 c.execute("""SELECT p.name, c.name, p.price, p.quantity
+#                              FROM products p
+#                              INNER JOIN categories c ON p.category_id = c.id
+#                              WHERE p.name = ?""", (product_name,))
+#                 products = c.fetchall()
+#                 for product_name, category_name, price, quantity in products:
+#                     print(product_name)
+#                     print("Category:", category_name)
+#                     print("Price:", price)
+#                     print("Quantity:", quantity)
+#                     print("-" * 20)
+#         except ValueError:
+#             print("Please enter a number between 1 and 3")
+#
+#     conn.close() # single close at the very end
+#
+# def edit_transactions():
+#     conn = sqlite3.connect('database/finance.db')
+#     c = conn.cursor()
+#     print("\n==== Update Transaction ====\n")
+#
+#     # Ask for ID and validate
+#     while True:
+#         try:
+#             unique_id = int(input("Enter the ID of the transaction you want to update: "))
+#
+#             c.execute("SELECT ID FROM finance WHERE ID = ?", (unique_id,))
+#             result = c.fetchone()
+#
+#             if result is None:
+#                 print("Invalid ID. Transaction does not exist.\n")
+#                 continue
+#
+#             break
+#
+#         except ValueError:
+#             print("Invalid input. Please enter a valid number.")
+#
+#     # Get old amount
+#     c.execute("SELECT Amount FROM finance WHERE unique_ID = ?", (unique_id,))
+#     old_amount = c.fetchone()[0]
+#     print("\nOld amount:", old_amount)
+#     # Get new amount
+#     while True:
+#         try:
+#             new_amount = float(input("Enter the new amount: "))
+#             if new_amount <= 0:
+#                 print("New amount must be greater than 0.")
+#                 continue
+#             break
+#         except ValueError:
+#             print("Invalid amount. Please enter a number.")
+#     # Update database
+#     c.execute(
+#         "UPDATE finance SET Amount = ? WHERE unique_ID = ?",
+#         (new_amount, unique_id)
+#     )
+#     print("\nTransaction updated.")
+#     conn.commit()
+#     conn.close()
+#
+#
+# def delete_transactions():
+#     conn = sqlite3.connect('database/finance.db')
+#     c = conn.cursor()
+#     c.execute("SELECT COUNT(*) FROM finance")
+#     # Ask for ID and validate
+#     while True:
+#         try:
+#             unique_id = int(input("Enter the ID of the transaction you want to delete: "))
+#             c.execute("SELECT unique_ID FROM finance WHERE unique_ID = ?", (unique_id,))
+#             result = c.fetchone()
+#             if result is None:
+#                 print("Invalid ID. Transaction does not exist.\n")
+#                 continue
+#             break
+#
+#         except ValueError:
+#             print("Invalid input. Please enter a valid number.")
+#
+#     c.execute("DELETE FROM finance WHERE unique_ID = ?", (unique_id,))
+#     print("\nTransaction deleted.")
+#     conn.commit()
+#     conn.close()

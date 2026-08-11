@@ -22,8 +22,7 @@ def setup():
     c.execute("""
         CREATE TABLE IF NOT EXISTS categories (
             id INTEGER PRIMARY KEY AUTOINCREMENT, -- Unique identifier
-            name TEXT NOT NULL UNIQUE,            -- Category name (Food, Bills, etc.)
-            type TEXT NOT NULL                    -- Income / Expense / Other
+            name TEXT NOT NULL UNIQUE        -- Income / Expense / Other
         );
     """)
 
