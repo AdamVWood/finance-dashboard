@@ -259,7 +259,7 @@ def inventory_actions():
                 while True:
                     try:
                         unique_id = int(input("Enter the ID of the transaction you want to delete: "))
-                        c.execute("SELECT unique_ID FROM finance WHERE unique_ID = ?", (unique_id,))
+                        c.execute("SELECT id FROM transactions WHERE unique_ID = ?", (unique_id,))
                         result = c.fetchone()
                         if result is None:
                             print("Invalid ID. Transaction does not exist.\n")
@@ -269,25 +269,39 @@ def inventory_actions():
                     except ValueError:
                         print("Invalid input. Please enter a valid number.")
 
-                c.execute("DELETE FROM finance WHERE unique_ID = ?", (unique_id,))
+                c.execute("DELETE FROM transaction WHERE id = ?", (unique_id,))
                 print("\nTransaction deleted.")
             elif choice == 3:
                 while True:
-                    product_name = input("What is the name of the product you want to search: ")
-                    if product_name:
+                    try:
+                        transaction_id = int(input("What is the ID of the transaction you want to search: "))
+                        # Check if transaction exists
+                        c.execute("SELECT id FROM transactions WHERE id = ?", (transaction_id,))
+                        result = c.fetchone()
+                        if result is None:
+                            print("Invalid ID. Transaction does not exist.\n")
+                            continue
                         break
-                    else:
-                        print("Please enter a valid product name.")
-                c.execute("""SELECT p.name, c.name, p.price, p.quantity
-                             FROM products p
-                             INNER JOIN categories c ON p.category_id = c.id
-                             WHERE p.name = ?""", (product_name,))
-                products = c.fetchall()
-                for product_name, category_name, price, quantity in products:
-                    print(product_name)
-                    print("Category:", category_name)
-                    print("Price:", price)
-                    print("Quantity:", quantity)
+                    except ValueError:
+                        print("Invalid input. Please enter a valid number.")
+
+                    # Fetch transaction details with category name
+                c.execute("""
+                        SELECT t.id, t.amount, t.transaction_type, c.name, t.description, t.date, t.created_at
+                        FROM transactions t
+                        INNER JOIN categories c ON t.category_id = c.id
+                        WHERE t.id = ?
+                    """, (transaction_id,))
+
+                transaction = c.fetchone()
+                if transaction:
+                    print("\nTransaction ID:", transaction[0])
+                    print("Amount:", transaction[1])
+                    print("Type:", transaction[2])
+                    print("Category:", transaction[3])
+                    print("Description:", transaction[4])
+                    print("Date:", transaction[5])
+                    print("Created At:", transaction[6])
                     print("-" * 20)
             else:
                 print("Invalid input. Please enter a number between 1 and 3.")
