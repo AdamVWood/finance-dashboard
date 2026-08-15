@@ -1,0 +1,159 @@
+import sqlite3
+
+def category_exists(category_id):
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+    c.execute("SELECT id FROM categories WHERE id = ?", (category_id,))
+    result = c.fetchone()
+    conn.close()
+    return result is not None
+
+
+def add_category():
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+    while True:
+        name = input("Enter category name: ").strip()
+        if name == "":
+            print("Category name cannot be empty.")
+        else:
+            break
+    c.execute("INSERT INTO categories (name) VALUES (?)", (name,))
+    conn.commit()
+    conn.close()
+    print("\nCategory added successfully.")
+
+
+def view_categories():
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+    c.execute("SELECT id, name FROM categories")
+    rows = c.fetchall()
+    if not rows:
+        print("No categories found.")
+    else:
+        print("\n==== Categories ====\n")
+        print(f"{'ID':<5} {'Name':<20}")
+        print("-" * 30)
+        for cat in rows:
+            print(f"{cat[0]:<5} {cat[1]:<20}")
+    conn.close()
+
+
+def delete_category():
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+
+    c.execute("SELECT COUNT(*) FROM categories")
+    if c.fetchone()[0] == 0:
+        print("There are no categories.")
+        conn.close()
+        return
+
+    while True:
+        try:
+            cat_id = int(input("Enter the ID of the category to delete: "))
+            c.execute("SELECT id FROM categories WHERE id = ?", (cat_id,))
+            if c.fetchone() is None:
+                print("Invalid ID. Category does not exist.")
+                continue
+            break
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+
+    cat = c.execute("SELECT id, name FROM categories WHERE id = ?", (cat_id,)).fetchone()
+    if cat:
+        print("\n==== Category To Delete ====\n")
+        print(f"{'ID':<5} {'Name':<20}")
+        print("-" * 30)
+        print(f"{cat[0]:<5} {cat[1]:<20}")
+
+    confirm = input("Are you sure you want to delete this category? (y/n): ").lower()
+    if confirm == "y":
+        c.execute("DELETE FROM categories WHERE id = ?", (cat_id,))
+        conn.commit()
+        print("\nCategory deleted.")
+    else:
+        print("\nDeletion cancelled.")
+
+    conn.close()
+
+
+def update_category():
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+    while True:
+        try:
+            cat_id = int(input("Enter the ID of the category to update: "))
+            c.execute("SELECT id FROM categories WHERE id = ?", (cat_id,))
+            if c.fetchone() is None:
+                print("Invalid ID. Category does not exist.")
+                continue
+            break
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+
+    old_name = c.execute("SELECT name FROM categories WHERE id = ?", (cat_id,)).fetchone()[0]
+    print("\nOld name:", old_name)
+    new_name = input("Enter new category name: ").strip()
+    if new_name == "":
+        print("Category name cannot be empty.")
+    else:
+        c.execute("UPDATE categories SET name = ? WHERE id = ?", (new_name, cat_id))
+        conn.commit()
+        print("\nCategory updated.")
+
+    conn.close()
+
+
+def search_category():
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+    while True:
+        try:
+            cat_id = int(input("Enter the ID of the category to search: "))
+            c.execute("SELECT id FROM categories WHERE id = ?", (cat_id,))
+            if c.fetchone() is None:
+                print("Invalid ID. Category does not exist.")
+                continue
+            break
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+
+    cat = c.execute("SELECT id, name FROM categories WHERE id = ?", (cat_id,)).fetchone()
+    if cat:
+        print("\n==== Category Details ====\n")
+        print(f"{'ID':<5} {'Name':<20}")
+        print("-" * 30)
+        print(f"{cat[0]:<5} {cat[1]:<20}")
+
+    conn.close()
+
+
+def financial_actions():
+    conn = sqlite3.connect("database/finance.db")
+    c = conn.cursor()
+    while True:
+        c.execute("SELECT COUNT(*) FROM categories")
+        count = c.fetchone()[0]
+        if count == 0:
+            print("There are no categories.")
+            break
+        try:
+            choice = int(input("Would you like to:\n"
+                               "1: Update category\n"
+                               "2: Search category\n"
+                               "3: Delete category\n"))
+            if choice == 1:
+                update_category()
+            elif choice == 2:
+                search_category()
+            elif choice == 3:
+                delete_category()
+            else:
+                print("Invalid input. Please enter 1, 2, or 3.")
+                continue
+            break
+        except ValueError:
+            print("Invalid input. Please enter 1, 2, or 3.")
+    conn.close()

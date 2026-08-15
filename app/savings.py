@@ -1,5 +1,6 @@
 import sqlite3
 import datetime
+from category import category_exists
 
 def add_savings_goal():
     conn = sqlite3.connect('database/finance.db')
@@ -12,6 +13,20 @@ def add_savings_goal():
             print("Name cannot be empty.")
         else:
             break
+
+    # Category: must exist
+    while True:
+        try:
+            category_id = int(input("Enter the category ID: "))
+            if category_id > 0:
+                if category_exists(category_id):
+                    break
+                else:
+                    print("Category does not exist.")
+            else:
+                print("Category ID must be a positive integer.")
+        except ValueError:
+            print("Please enter a valid category ID.")
 
     # Target amount: must be positive
     while True:
@@ -47,9 +62,9 @@ def add_savings_goal():
     created_at = datetime.datetime.today().strftime("%Y-%m-%d")
 
     c.execute('''
-        INSERT INTO savings_goals (name, target_amount, current_amount, deadline, created_at)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (name, target_amount, current_amount, deadline, created_at))
+        INSERT INTO savings_goals (name, category_id, target_amount, current_amount, deadline, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (name, category_id, target_amount, current_amount, deadline, created_at))
 
     conn.commit()
     conn.close()
@@ -59,17 +74,21 @@ def add_savings_goal():
 def view_savings_goals():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
-    c.execute("SELECT id, name, target_amount, current_amount, deadline, created_at FROM savings_goals")
+    c.execute("""
+        SELECT g.id, g.name, c.name, g.target_amount, g.current_amount, g.deadline, g.created_at
+        FROM savings_goals g
+        INNER JOIN categories c ON g.category_id = c.id
+    """)
     rows = c.fetchall()
 
     if not rows:
         print("No savings goals found.")
     else:
         print("\n==== Savings Goals ====\n")
-        print(f"{'ID':<5} {'Name':<20} {'Target':<10} {'Current':<10} {'Deadline':<12} {'Created At':<12}")
-        print("-" * 80)
+        print(f"{'ID':<5} {'Name':<20} {'Category':<15} {'Target':<10} {'Current':<10} {'Deadline':<12} {'Created At':<12}")
+        print("-" * 100)
         for g in rows:
-            print(f"{g[0]:<5} {g[1]:<20} {g[2]:<10.2f} {g[3]:<10.2f} {g[4]:<12} {g[5]:<12}")
+            print(f"{g[0]:<5} {g[1]:<20} {g[2]:<15} {g[3]:<10.2f} {g[4]:<10.2f} {g[5]:<12} {g[6]:<12}")
 
     conn.close()
 
@@ -95,13 +114,18 @@ def delete_savings_goal():
         except ValueError:
             print("Invalid input. Please enter a number.")
 
-    c.execute("SELECT id, name, target_amount, current_amount, deadline, created_at FROM savings_goals WHERE id = ?", (goal_id,))
+    c.execute("""
+        SELECT g.id, g.name, c.name, g.target_amount, g.current_amount, g.deadline, g.created_at
+        FROM savings_goals g
+        INNER JOIN categories c ON g.category_id = c.id
+        WHERE g.id = ?
+    """, (goal_id,))
     goal = c.fetchone()
     if goal:
         print("\n==== Savings Goal To Delete ====\n")
-        print(f"{'ID':<5} {'Name':<20} {'Target':<10} {'Current':<10} {'Deadline':<12} {'Created At':<12}")
-        print("-" * 80)
-        print(f"{goal[0]:<5} {goal[1]:<20} {goal[2]:<10.2f} {goal[3]:<10.2f} {goal[4]:<12} {goal[5]:<12}")
+        print(f"{'ID':<5} {'Name':<20} {'Category':<15} {'Target':<10} {'Current':<10} {'Deadline':<12} {'Created At':<12}")
+        print("-" * 100)
+        print(f"{goal[0]:<5} {goal[1]:<20} {goal[2]:<15} {goal[3]:<10.2f} {goal[4]:<10.2f} {goal[5]:<12} {goal[6]:<12}")
 
     confirm = input("Are you sure you want to delete this savings goal? (y/n): ").lower()
     if confirm == "y":
@@ -131,7 +155,7 @@ def update_savings_goal():
 
     while True:
         try:
-            choice = int(input("Which field do you want to edit?\n1: Name\n2: Target Amount\n3: Current Amount\n4: Deadline\n"))
+            choice = int(input("Which field do you want to edit?\n1: Name\n2: Target Amount\n3: Current Amount\n4: Deadline\n5: Category ID\n"))
             if choice == 1:
                 old_name = c.execute("SELECT name FROM savings_goals WHERE id = ?", (goal_id,)).fetchone()[0]
                 print("\nOld name:", old_name)
@@ -174,15 +198,31 @@ def update_savings_goal():
                     except ValueError:
                         print("Invalid date format. Please use YYYY-MM-DD.")
                 c.execute("UPDATE savings_goals SET deadline = ? WHERE id = ?", (new_deadline, goal_id))
+            elif choice == 5:
+                old_cat = c.execute("SELECT category_id FROM savings_goals WHERE id = ?", (goal_id,)).fetchone()[0]
+                print("\nOld category id:", old_cat)
+                while True:
+                    try:
+                        category_id = int(input("Enter new category ID: "))
+                        if category_id > 0:
+                            if category_exists(category_id):
+                                break
+                            else:
+                                print("Category does not exist.")
+                        else:
+                            print("Category ID must be a positive integer.")
+                    except ValueError:
+                        print("Please enter a valid category ID.")
+                c.execute("UPDATE savings_goals SET category_id = ? WHERE id = ?", (category_id, goal_id))
             else:
-                print("Please enter a number between 1 and 4.")
+                print("Please enter a number between 1 and 5.")
                 continue
 
             conn.commit()
             print("\nSavings goal updated.")
             break
         except ValueError:
-            print("Invalid input. Please enter a number between 1 and 4.")
+            print("Invalid input. Please enter a number between 1 and 5.")
 
     conn.close()
 
@@ -202,13 +242,18 @@ def search_savings_goal():
         except ValueError:
             print("Invalid input. Please enter a number.")
 
-    c.execute("SELECT id, name, target_amount, current_amount, deadline, created_at FROM savings_goals WHERE id = ?", (goal_id,))
+    c.execute("""
+        SELECT g.id, g.name, c.name, g.target_amount, g.current_amount, g.deadline, g.created_at
+        FROM savings_goals g
+        INNER JOIN categories c ON g.category_id = c.id
+        WHERE g.id = ?
+    """, (goal_id,))
     goal = c.fetchone()
     if goal:
         print("\n==== Savings Goal Details ====\n")
-        print(f"{'ID':<5} {'Name':<20} {'Target':<10} {'Current':<10} {'Deadline':<12} {'Created At':<12}")
-        print("-" * 80)
-        print(f"{goal[0]:<5} {goal[1]:<20} {goal[2]:<10.2f} {goal[3]:<10.2f} {goal[4]:<12} {goal[5]:<12}")
+        print(f"{'ID':<5} {'Name':<20} {'Category':<15} {'Target':<10} {'Current':<10} {'Deadline':<12} {'Created At':<12}")
+        print("-" * 100)
+        print(f"{goal[0]:<5} {goal[1]:<20} {goal[2]:<15} {goal[3]:<10.2f} {goal[4]:<10.2f} {goal[5]:<12} {goal[6]:<12}")
 
     conn.close()
 

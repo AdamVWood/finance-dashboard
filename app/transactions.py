@@ -1,6 +1,6 @@
 import sqlite3
 import datetime
-
+from category import category_exists
 
 def add_transaction():
     conn = sqlite3.connect('database/finance.db')
@@ -52,10 +52,8 @@ def add_transaction():
         try:
             category = int(input("Please enter the category ID: "))
             if category > 0:
-                # Check if category exists first
-                c.execute("SELECT id FROM categories WHERE id = ?", (category,))
-                if c.fetchone():
-                    break  # valid category, exit loop
+                if category_exists(category):
+                    break
                 else:
                     print("Category does not exist.")
             else:
@@ -248,12 +246,10 @@ def update_transaction():
                 print("\nOld category id:", c.fetchone()[0])
                 while True:
                     try:
-                        category = int(input("Please enter your category: "))
+                        category = int(input("Please enter the category ID: "))
                         if category > 0:
-                            # Check if category exists first
-                            c.execute("SELECT id FROM categories WHERE id = ?", (category,))
-                            if c.fetchone():
-                                break  # valid category, exit loop
+                            if category_exists(category):
+                                break
                             else:
                                 print("Category does not exist.")
                         else:
@@ -343,17 +339,18 @@ def financial_actions():
         try:
             choice = int(input("Would you like to:\n"
                                "1: Update transaction\n"
-                               "2: Search transaction\n"))
-            if choice < 1 or choice > 2:
-                print("Please enter 1 or 2")
-                continue
-            elif choice == 1:
+                               "2: Search transaction\n"
+                               "3: Delete transaction\n"))
+            if choice == 1:
                 update_transaction()
             elif choice == 2:
                 search_transaction()
+            elif choice == 3:
+                delete_transaction()
             else:
-                print("Invalid input. Please enter the number 1 or 2.")
+                print("Invalid input. Please enter 1, 2, or 3.")
                 continue
             break
         except ValueError:
-            print("Please enter 1 or 2")
+            print("Invalid input. Please enter 1, 2, or 3.")
+    conn.close()

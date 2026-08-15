@@ -1,4 +1,5 @@
 import sqlite3
+from category import category_exists
 
 def add_budget():
     conn = sqlite3.connect('database/finance.db')
@@ -139,50 +140,42 @@ def update_budget():
     while True:
         try:
             unique_id = int(input("Enter the ID of the budget you want to update: "))
-
             c.execute("SELECT id FROM budgets WHERE id = ?", (unique_id,))
             result = c.fetchone()
-
             if result is None:
                 print("Invalid ID. Budget does not exist.\n")
                 continue
-
             break
-
         except ValueError:
             print("Invalid input. Please enter a valid number.")
+
     while True:
         try:
             result = int(input("Which field do you want to edit?:\n"
-                                "1: Category ID\n"
-                                "2: Amount\n"
-                                "3: Date\n"
-                               ))
+                               "1: Category ID\n"
+                               "2: Amount\n"
+                               "3: Date\n"))
             if result == 1:
                 c.execute("SELECT category_id FROM budgets WHERE id = ?", (unique_id,))
                 print("\nOld category id:", c.fetchone()[0])
                 while True:
                     try:
-                        category = int(input("Please enter your category: "))
+                        category = int(input("Please enter your category ID: "))
                         if category > 0:
-                            # Check if category exists first
-                            c.execute("SELECT id FROM categories WHERE id = ?", (category,))
-                            if c.fetchone():
-                                break  # valid category, exit loop
+                            if category_exists(category):
+                                break
                             else:
                                 print("Category does not exist.")
                         else:
                             print("Category ID must be a positive integer.")
                     except ValueError:
                         print("Please enter a valid category ID.")
-                c.execute("UPDATE budgets SET category_id  = ? WHERE id = ?",
-                          (category, unique_id))
-            if result == 2:
-                # Get old amount
+                c.execute("UPDATE budgets SET category_id = ? WHERE id = ?", (category, unique_id))
+
+            elif result == 2:
                 c.execute("SELECT amount FROM budgets WHERE id = ?", (unique_id,))
                 old_amount = c.fetchone()[0]
                 print("\nOld amount:", old_amount)
-                # Get new amount
                 while True:
                     try:
                         new_amount = float(input("Enter the new amount: "))
@@ -192,16 +185,12 @@ def update_budget():
                         break
                     except ValueError:
                         print("Invalid amount. Please enter a number.")
-                # Update database
-                c.execute(
-                    "UPDATE budgets SET amount = ? WHERE id = ?",
-                    (new_amount, unique_id)
-                )
-            if result == 3:
+                c.execute("UPDATE budgets SET amount = ? WHERE id = ?", (new_amount, unique_id))
+
+            elif result == 3:
                 c.execute("SELECT month, year FROM budgets WHERE id = ?", (unique_id,))
                 old_month, old_year = c.fetchone()
                 print(f"\nOld period: Month {old_month}, Year {old_year}")
-                # Month: 1-12
                 while True:
                     try:
                         month = int(input("Please enter the month (1-12): "))
@@ -211,8 +200,6 @@ def update_budget():
                             print("Month must be between 1 and 12.")
                     except ValueError:
                         print("Invalid input. Please enter a valid month.")
-
-                # Year: four digits
                 while True:
                     try:
                         year = int(input("Please enter the year (YYYY): "))
@@ -222,20 +209,18 @@ def update_budget():
                             print("Year must be a valid four-digit year.")
                     except ValueError:
                         print("Invalid input. Please enter a valid year.")
-
-                c.execute('''
-                        UPDATE budgets SET month = ?, year = ? WHERE id = ?
-                        ''', (month, year, unique_id))  # enters the data
+                c.execute("UPDATE budgets SET month = ?, year = ? WHERE id = ?", (month, year, unique_id))
 
             else:
-                print("Please enter a number between 1 and 5.")
+                print("Please enter a number between 1 and 3.")
                 continue
+
             print("\nBudget updated.")
             conn.commit()
             conn.close()
             break
         except ValueError:
-            print("Invalid input. Please enter a number between 1 and 5.")
+            print("Invalid input. Please enter a number between 1 and 3.")
 
 
 def search_budget():
@@ -284,17 +269,18 @@ def financial_actions():
         try:
             choice = int(input("Would you like to:\n"
                                "1: Update budget\n"
-                               "2: Search budget\n"))
-            if choice < 1 or choice > 2:
-                print("Please enter 1 or 2")
-                continue
-            elif choice == 1:
+                               "2: Search budget\n"
+                               "3: Delete budget\n"))
+            if choice == 1:
                 update_budget()
             elif choice == 2:
                 search_budget()
+            elif choice == 3:
+                delete_budget()
             else:
-                print("Invalid input. Please enter the number 1 or 2.")
+                print("Invalid input. Please enter 1, 2, or 3.")
                 continue
             break
         except ValueError:
-            print("Please enter 1 or 2")
+            print("Invalid input. Please enter 1, 2, or 3.")
+    conn.close()
