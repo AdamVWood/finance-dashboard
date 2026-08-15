@@ -7,31 +7,34 @@ print("Database setup complete")
 # transactions.py
 #     add_transaction()
 #     view_transactions()
+#     delete_transaction
 #     inventory_actions()
 #         edit_transaction
-#         delete_transaction
 #         Search_transaction
 
 # budgets.py
-#     add_budget()
+#     add_budgets()
 #     view_budgets()
+#     delete_budgets
 #     inventory_actions()
 #         edit_budgets
-#         delete_budgets
 #         Search_budgets
 
 # savings.py
-#     add_savings_goal()
-#     view_savings_goals()
+#     add_savings()
+#     view_savings()
+#     delete_savings
 #     inventory_actions()
-#         edit_savings_goals
-#         delete_savings_goals
-#         Search_savings_goals
+#         edit_savings
+#         Search_savings
 
 # investments.py
-#     add_investment()
+#     add_investments()
 #     view_investments()
+#     delete_investments
 #     inventory_actions()
 #         edit_investments
-#         delete_investments
 #         Search_investments
+
+# export an Excel sheet to make input of data easier for user
+# importing that data to gather that data into a db file

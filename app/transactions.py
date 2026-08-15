@@ -50,7 +50,7 @@ def add_transaction():
     # Category: cannot be empty
     while True:
         try:
-            category = int(input("Please enter your category: "))
+            category = int(input("Please enter the category ID: "))
             if category > 0:
                 # Check if category exists first
                 c.execute("SELECT id FROM categories WHERE id = ?", (category,))
@@ -295,7 +295,7 @@ def update_transaction():
             print("Invalid input. Please enter a number between 1 and 5.")
 
 
-def search_transactions():
+def search_transaction():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
     # Ask for ID and validate
@@ -314,11 +314,11 @@ def search_transactions():
 
     # Fetch transaction details with category name
     c.execute("""
-                           SELECT t.id, t.amount, t.transaction_type, c.name, t.description, t.date, t.created_at
-                           FROM transactions t
-                           INNER JOIN categories c ON t.category_id = c.id
-                           WHERE t.id = ?
-                       """, (transaction_id,))
+            SELECT t.id, t.amount, t.transaction_type, c.name, t.description, t.date, t.created_at
+            FROM transactions t
+            INNER JOIN categories c ON t.category_id = c.id
+            WHERE t.id = ?
+        """, (transaction_id,))
 
     transaction = c.fetchone()
     if transaction:
@@ -350,7 +350,7 @@ def financial_actions():
             elif choice == 1:
                 update_transaction()
             elif choice == 2:
-                search_transactions()
+                search_transaction()
             else:
                 print("Invalid input. Please enter the number 1 or 2.")
                 continue
