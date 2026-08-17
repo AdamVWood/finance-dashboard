@@ -71,6 +71,77 @@ def add_savings_goal():
     print("\nSavings goal added successfully.")
 
 
+def filter_savings_goals(mode="all"):
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+
+    query = """
+        SELECT id, name, target_amount, current_amount, deadline, created_at
+        FROM savings_goals
+    """
+    params = []
+    order_clause = ""
+
+    if mode == "keyword":
+        keyword = input("Enter keyword (name): ").strip()
+        if not keyword:
+            print("Error: Keyword cannot be empty.")
+            conn.close()
+            return
+        query += " WHERE name LIKE ?"
+        params = [f"%{keyword}%"]
+
+    elif mode == "date":
+        import datetime
+        start_date = input("Enter start deadline (YYYY-MM-DD): ").strip()
+        end_date = input("Enter end deadline (YYYY-MM-DD): ").strip()
+        try:
+            start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+            end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d")
+            if start_dt > end_dt:
+                print("Error: Start date cannot be after end date.")
+                conn.close()
+                return
+        except ValueError:
+            print("Error: Dates must be in YYYY-MM-DD format.")
+            conn.close()
+            return
+        query += " WHERE deadline BETWEEN ? AND ?"
+        params = [start_date, end_date]
+
+    elif mode == "sort_deadline":
+        order_clause = " ORDER BY deadline ASC"
+
+    elif mode == "sort_target":
+        order_clause = " ORDER BY target_amount DESC"
+
+    elif mode == "sort_current":
+        order_clause = " ORDER BY current_amount DESC"
+
+    elif mode == "all":
+        order_clause = " ORDER BY deadline ASC"
+
+    c.execute(query + order_clause, params)
+    rows = c.fetchall()
+
+    if not rows:
+        print("No matching savings goals found.")
+    else:
+        print("\n==== Savings Goals ====\n")
+        print(f"{'ID':<5} {'Name':<20} {'Target':>12} {'Current':>12} {'Deadline':<12} {'Created At':<12}")
+        print("-" * 80)
+        for row in rows:
+            sid = row[0]
+            name = row[1]
+            target = f"${row[2]:,.2f}"
+            current = f"${row[3]:,.2f}"
+            deadline = row[4]
+            created_at = row[5][:10]
+            print(f"{sid:<5} {name:<20} {target:>12} {current:>12} {deadline:<12} {created_at:<12}")
+
+    conn.close()
+
+
 def view_savings_goals():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
@@ -99,7 +170,6 @@ def view_savings_goals():
             print(f"{sid:<5} {name:<20} {target:>12} {current:>12} {deadline:<12} {created_at:<12}")
 
     conn.close()
-
 
 
 def delete_savings_goal():
@@ -310,10 +380,11 @@ def financial_actions():
 
 def menu():
     while True:
-        print("\n==== Saving Goal Menu ====")
-        print("1: Add Saving Goal")
-        print("2: View Saving Goals")
-        print("3: Financial Actions (update/search/delete)")
+        print("\n==== Savings Goals Menu ====")
+        print("1: Add Savings Goal")
+        print("2: View/Filter Savings Goals")
+        print("3: Search Savings Goal by ID")
+        print("4: Financial Actions (update/delete)")
         print("0: Back to Dashboard")
 
         try:
@@ -321,12 +392,42 @@ def menu():
             if choice == 1:
                 add_savings_goal()
             elif choice == 2:
-                view_savings_goals()
+                while True:
+                    print("\n==== View/Filter Savings Goals ====")
+                    print("1: View all savings goals")
+                    print("2: Search by keyword")
+                    print("3: Filter by deadline range")
+                    print("4: Sort by deadline")
+                    print("5: Sort by target amount")
+                    print("6: Sort by current amount")
+                    print("0: Back")
+
+                    sub_choice = input("Select an option: ").strip()
+
+                    if sub_choice == "1":
+                        filter_savings_goals("all")
+                    elif sub_choice == "2":
+                        filter_savings_goals("keyword")
+                    elif sub_choice == "3":
+                        filter_savings_goals("date")
+                    elif sub_choice == "4":
+                        filter_savings_goals("sort_deadline")
+                    elif sub_choice == "5":
+                        filter_savings_goals("sort_target")
+                    elif sub_choice == "6":
+                        filter_savings_goals("sort_current")
+                    elif sub_choice == "0":
+                        break
+                    else:
+                        print("Invalid choice. Please enter 0–6.")
+
             elif choice == 3:
+                search_savings_goal()
+            elif choice == 4:
                 financial_actions()
             elif choice == 0:
                 break
             else:
-                print("Invalid choice. Please enter 0–3.")
+                print("Invalid choice. Please enter 0–4.")
         except ValueError:
             print("Invalid input. Please enter a number.")

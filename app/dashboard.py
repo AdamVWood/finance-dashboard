@@ -1,6 +1,6 @@
-from app import transactions
-from app import budgets
-from app import savings_goals
+from app import transactions #done
+from app import budgets #done
+from app import savings_goals #done
 from app import investments #done
 from app import categories
 from app import financial_report

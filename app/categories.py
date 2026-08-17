@@ -10,6 +10,31 @@ def category_exists(category_id):
     return result is not None
 
 
+def search_category_by_id():
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+
+    try:
+        category_id = int(input("Enter category ID: ").strip())
+    except ValueError:
+        print("Error: ID must be a number.")
+        conn.close()
+        return
+
+    c.execute("SELECT id, name FROM categories WHERE id = ?", (category_id,))
+    row = c.fetchone()
+
+    if not row:
+        print("No category found with that ID.")
+    else:
+        print("\n==== Category Details ====\n")
+        print(f"{'ID':<5} {'Name':<20}")
+        print("-" * 30)
+        print(f"{row[0]:<5} {row[1]:<20}")
+
+    conn.close()
+
+
 def add_category():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
@@ -28,26 +53,19 @@ def add_category():
 def view_categories():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
-    c.execute("""
-        SELECT id, name, created_at
-        FROM categories
-        ORDER BY name ASC
-    """)
+    c.execute("SELECT id, name FROM categories ORDER BY name ASC")
     rows = c.fetchall()
 
     if not rows:
         print("No categories found.")
     else:
-        print("\n==== Categories Overview ====\n")
-        # Print headers
-        print(f"{'ID':<5} {'Name':<20} {'Created At':<12}")
-        print("-" * 40)
-        # Print each category row
+        print("\n==== Categories ====\n")
+        print(f"{'ID':<5} {'Name':<20}")
+        print("-" * 30)
         for row in rows:
             cid = row[0]
             name = row[1]
-            created_at = row[2][:10]  # slice to YYYY-MM-DD
-            print(f"{cid:<5} {name:<20} {created_at:<12}")
+            print(f"{cid:<5} {name:<20}")
 
     conn.close()
 
@@ -122,38 +140,25 @@ def search_category():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
 
-    # Ask for ID and validate
-    while True:
-        try:
-            category_id = int(input("What is the ID of the category you want to search: "))
-            # Check if category exists
-            c.execute("SELECT id FROM categories WHERE id = ?", (category_id,))
-            result = c.fetchone()
-            if result is None:
-                print("Invalid ID. Category does not exist.\n")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter a valid number.")
+    keyword = input("Enter category name keyword: ").strip()
+    if not keyword:
+        print("Error: Keyword cannot be empty.")
+        conn.close()
+        return
 
-    # Fetch category details
-    c.execute("""
-        SELECT id, name, created_at
-        FROM categories
-        WHERE id = ?
-    """, (category_id,))
+    c.execute("SELECT id, name FROM categories WHERE name LIKE ?", (f"%{keyword}%",))
+    rows = c.fetchall()
 
-    category = c.fetchone()
-    if category:
-        print("\n==== Category Details ====\n")
-        # Print headers
-        print(f"{'ID':<5} {'Name':<20} {'Created At':<12}")
-        print("-" * 40)
-        # Print row
-        cid = category[0]
-        name = category[1]
-        created_at = category[2][:10]  # slice to YYYY-MM-DD
-        print(f"{cid:<5} {name:<20} {created_at:<12}")
+    if not rows:
+        print("No matching categories found.")
+    else:
+        print("\n==== Category Search Results ====\n")
+        print(f"{'ID':<5} {'Name':<20}")
+        print("-" * 30)
+        for row in rows:
+            cid = row[0]
+            name = row[1]
+            print(f"{cid:<5} {name:<20}")
 
     conn.close()
 
@@ -170,21 +175,25 @@ def financial_actions():
         try:
             choice = int(input("Would you like to:\n"
                                "1: Update category\n"
-                               "2: Search category\n"
-                               "3: Delete category\n"))
+                               "2: Search category by name\n"
+                               "3: Search category by ID\n"
+                               "4: Delete category\n"))
             if choice == 1:
                 update_category()
             elif choice == 2:
                 search_category()
             elif choice == 3:
+                search_category_by_id()
+            elif choice == 4:
                 delete_category()
             else:
-                print("Invalid input. Please enter 1, 2, or 3.")
+                print("Invalid input. Please enter 1–4.")
                 continue
             break
         except ValueError:
-            print("Invalid input. Please enter 1, 2, or 3.")
+            print("Invalid input. Please enter 1–4.")
     conn.close()
+
 
 
 def menu():
@@ -192,7 +201,9 @@ def menu():
         print("\n==== Categories Menu ====")
         print("1: Add Category")
         print("2: View Categories")
-        print("3: Financial Actions (update/search/delete)")
+        print("3: Search Category by Name")
+        print("4: Search Category by ID")
+        print("5: Financial Actions (update/delete)")
         print("0: Back to Dashboard")
 
         try:
@@ -202,11 +213,15 @@ def menu():
             elif choice == 2:
                 view_categories()
             elif choice == 3:
+                search_category()
+            elif choice == 4:
+                search_category_by_id()
+            elif choice == 5:
                 financial_actions()
             elif choice == 0:
                 break
             else:
-                print("Invalid choice. Please enter 0–3.")
+                print("Invalid choice. Please enter 0–5.")
         except ValueError:
             print("Invalid input. Please enter a number.")
 

@@ -34,6 +34,7 @@ def setup():
             amount REAL NOT NULL,                 -- Budgeted amount
             month INTEGER NOT NULL,               -- 1–12
             year INTEGER NOT NULL                 -- Four-digit year
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP -- Auto timestamp
         );
     """)
 

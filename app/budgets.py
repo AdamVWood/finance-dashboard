@@ -1,5 +1,7 @@
 import sqlite3
+import datetime
 from app.categories import category_exists
+
 
 def add_budget():
     conn = sqlite3.connect('database/finance.db')
@@ -53,11 +55,106 @@ def add_budget():
         except ValueError:
             print("Invalid input. Please enter a valid year.")
 
+    created_at = datetime.datetime.today().strftime("%Y-%m-%d")
+
     c.execute('''
-        INSERT INTO budgets (category_id, amount, month, year)
+        INSERT INTO budgets (category_id, amount, month, year, created_at)
         VALUES (?, ?, ?, ?)
-        ''', (category, amount, month, year))  # enters the data
+        ''', (category, amount, month, year, created_at))  # enters the data
     conn.commit()
+    conn.close()
+
+
+def filter_budgets(mode="all"):
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+
+    query = """
+        SELECT b.id, b.amount, c.name, b.month, b.year, b.created_at
+        FROM budgets b
+        INNER JOIN categories c ON b.category_id = c.id
+    """
+    params = []
+    order_clause = ""
+
+    if mode == "keyword":
+        keyword = input("Enter keyword (category/month/year): ").strip()
+        if not keyword:
+            print("Error: Keyword cannot be empty.")
+            conn.close()
+            return
+        query += " WHERE c.name LIKE ? OR b.month LIKE ? OR b.year LIKE ?"
+        params = [f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"]
+
+    elif mode == "category":
+        category = input("Enter category name: ").strip()
+        if not category:
+            print("Error: Category cannot be empty.")
+            conn.close()
+            return
+        query += " WHERE c.name = ?"
+        params = [category]
+
+    elif mode == "month_year":
+        try:
+            month = int(input("Enter month (1–12): ").strip())
+            year = int(input("Enter year (YYYY): ").strip())
+            if month < 1 or month > 12:
+                print("Error: Month must be between 1 and 12.")
+                conn.close()
+                return
+        except ValueError:
+            print("Error: Month and year must be numbers.")
+            conn.close()
+            return
+        query += " WHERE b.month = ? AND b.year = ?"
+        params = [month, year]
+
+    elif mode == "date":
+        start_date = input("Enter start date (YYYY-MM-DD): ").strip()
+        end_date = input("Enter end date (YYYY-MM-DD): ").strip()
+        try:
+            start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+            end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d")
+            if start_dt > end_dt:
+                print("Error: Start date cannot be after end date.")
+                conn.close()
+                return
+        except ValueError:
+            print("Error: Dates must be in YYYY-MM-DD format.")
+            conn.close()
+            return
+        query += " WHERE b.created_at BETWEEN ? AND ?"
+        params = [start_date, end_date]
+
+    elif mode == "sort_date":
+        order_clause = " ORDER BY b.created_at DESC"
+
+    elif mode == "sort_amount":
+        order_clause = " ORDER BY b.amount DESC"
+
+    elif mode == "all":
+        order_clause = " ORDER BY b.year DESC, b.month DESC"
+
+    # Execute query
+    c.execute(query + order_clause, params)
+    rows = c.fetchall()
+
+    if not rows:
+        print("No matching budgets found.")
+    else:
+        print("\n==== Budgets ====\n")
+        print(f"{'ID':<5} {'Amount':>12} {'Category':<15} {'Month':<8} {'Year':<6} {'Created At':<12}")
+        print("-" * 70)
+        for row in rows:
+            bid = row[0]
+            amount = f"${row[1]:,.2f}"
+            category = row[2]
+            month = row[3]
+            year = row[4]
+            created_at = row[5][:10]
+            print(f"{bid:<5} {amount:>12} {category:<15} {month:<8} {year:<6} {created_at:<12}")
+
     conn.close()
 
 
@@ -306,8 +403,9 @@ def menu():
     while True:
         print("\n==== Budgets Menu ====")
         print("1: Add Budget")
-        print("2: View Budgets")
-        print("3: Financial Actions (update/search/delete)")
+        print("2: View/Filter Budgets")
+        print("3: Search Budget by ID")
+        print("4: Financial Actions (update/delete)")
         print("0: Back to Dashboard")
 
         try:
@@ -315,13 +413,45 @@ def menu():
             if choice == 1:
                 add_budget()
             elif choice == 2:
-                view_budgets()
+                while True:
+                    print("\n==== View/Filter Budgets ====")
+                    print("1: View all budgets")
+                    print("2: Search by keyword")
+                    print("3: Filter by category")
+                    print("4: Filter by month/year")
+                    print("5: Filter by date range")
+                    print("6: Sort by created date")
+                    print("7: Sort by amount")
+                    print("0: Back")
+
+                    sub_choice = input("Select an option: ").strip()
+
+                    if sub_choice == "1":
+                        filter_budgets("all")
+                    elif sub_choice == "2":
+                        filter_budgets("keyword")
+                    elif sub_choice == "3":
+                        filter_budgets("category")
+                    elif sub_choice == "4":
+                        filter_budgets("month_year")
+                    elif sub_choice == "5":
+                        filter_budgets("date")
+                    elif sub_choice == "6":
+                        filter_budgets("sort_date")
+                    elif sub_choice == "7":
+                        filter_budgets("sort_amount")
+                    elif sub_choice == "0":
+                        break
+                    else:
+                        print("Invalid choice. Please enter 0–7.")
+
             elif choice == 3:
+                search_budget()
+            elif choice == 4:
                 financial_actions()
             elif choice == 0:
                 break
             else:
-                print("Invalid choice. Please enter 0–3.")
+                print("Invalid choice. Please enter 0–4.")
         except ValueError:
             print("Invalid input. Please enter a number.")
-

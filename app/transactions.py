@@ -87,6 +87,95 @@ def add_transaction():
     conn.close()
 
 
+def filter_transactions(mode="all"):
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+
+    query = """
+        SELECT t.id, t.date, t.description, c.name, t.transaction_type, t.amount, t.created_at
+        FROM transactions t
+        INNER JOIN categories c ON t.category_id = c.id
+    """
+    params = []
+    order_clause = ""
+
+    if mode == "keyword":
+        keyword = input("Enter keyword (description/category/type): ").strip()
+        if not keyword:
+            print("Error: Keyword cannot be empty.")
+            conn.close()
+            return
+        query += " WHERE t.description LIKE ? OR c.name LIKE ? OR t.transaction_type LIKE ?"
+        params = [f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"]
+
+    elif mode == "category":
+        category = input("Enter category name: ").strip()
+        if not category:
+            print("Error: Category cannot be empty.")
+            conn.close()
+            return
+        query += " WHERE c.name = ?"
+        params = [category]
+
+    elif mode == "type":
+        t_type = input("Enter transaction type (Income/Expense/Transfer): ").strip()
+        valid_types = ["Income", "Expense", "Transfer"]
+        if t_type not in valid_types:
+            print(f"Error: Invalid type. Valid options: {', '.join(valid_types)}")
+            conn.close()
+            return
+        query += " WHERE t.transaction_type = ?"
+        params = [t_type]
+
+    elif mode == "date":
+        start_date = input("Enter start date (YYYY-MM-DD): ").strip()
+        end_date = input("Enter end date (YYYY-MM-DD): ").strip()
+        try:
+            start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+            end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d")
+            if start_dt > end_dt:
+                print("Error: Start date cannot be after end date.")
+                conn.close()
+                return
+        except ValueError:
+            print("Error: Dates must be in YYYY-MM-DD format.")
+            conn.close()
+            return
+        query += " WHERE t.date BETWEEN ? AND ?"
+        params = [start_date, end_date]
+
+    elif mode == "sort_date":
+        order_clause = " ORDER BY t.date DESC"
+
+    elif mode == "sort_amount":
+        order_clause = " ORDER BY t.amount DESC"
+
+    elif mode == "all":
+        order_clause = " ORDER BY t.date DESC"
+
+    # Execute query
+    c.execute(query + order_clause, params)
+    rows = c.fetchall()
+
+    if not rows:
+        print("No matching transactions found.")
+    else:
+        print("\n==== Transactions ====\n")
+        print(f"{'ID':<5} {'Date':<12} {'Description':<20} {'Category':<15} {'Type':<10} {'Amount':>12} {'Created At':<12}")
+        print("-" * 95)
+        for row in rows:
+            tid = row[0]
+            date = row[1]
+            description = row[2] if row[2] else ""
+            category = row[3]
+            t_type = row[4]
+            amount = f"${row[5]:,.2f}"
+            created_at = row[6][:10]
+            print(f"{tid:<5} {date:<12} {description:<20} {category:<15} {t_type:<10} {amount:>12} {created_at:<12}")
+
+    conn.close()
+
+
 def view_transactions():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
@@ -377,8 +466,9 @@ def menu():
     while True:
         print("\n==== Transactions Menu ====")
         print("1: Add Transaction")
-        print("2: View Transactions")
-        print("3: Financial Actions (update/search/delete)")
+        print("2: View/Filter Transactions")
+        print("3: Search Transaction by ID")
+        print("4: Financial Actions (update/delete)")
         print("0: Back to Dashboard")
 
         try:
@@ -386,12 +476,45 @@ def menu():
             if choice == 1:
                 add_transaction()
             elif choice == 2:
-                view_transactions()
+                while True:
+                    print("\n==== View/Filter Transactions ====")
+                    print("1: View all transactions")
+                    print("2: Search by keyword")
+                    print("3: Filter by category")
+                    print("4: Filter by type")
+                    print("5: Filter by date range")
+                    print("6: Sort by date")
+                    print("7: Sort by amount")
+                    print("0: Back")
+
+                    sub_choice = input("Select an option: ").strip()
+
+                    if sub_choice == "1":
+                        filter_transactions("all")
+                    elif sub_choice == "2":
+                        filter_transactions("keyword")
+                    elif sub_choice == "3":
+                        filter_transactions("category")
+                    elif sub_choice == "4":
+                        filter_transactions("type")
+                    elif sub_choice == "5":
+                        filter_transactions("date")
+                    elif sub_choice == "6":
+                        filter_transactions("sort_date")
+                    elif sub_choice == "7":
+                        filter_transactions("sort_amount")
+                    elif sub_choice == "0":
+                        break
+                    else:
+                        print("Invalid choice. Please enter 0–7.")
+
             elif choice == 3:
+                search_transaction()
+            elif choice == 4:
                 financial_actions()
             elif choice == 0:
                 break
             else:
-                print("Invalid choice. Please enter 0–3.")
+                print("Invalid choice. Please enter 0–4.")
         except ValueError:
             print("Invalid input. Please enter a number.")
