@@ -102,11 +102,19 @@ def view_transactions():
     else:
         print("\n==== Transactions History ====\n")
         # Print headers
-        print(f"{'ID':<5} {'Amount':<10} {'Type':<15} {'Category':<15} {'Description':<40} {'Date':<12} {'Created At':<12}")
+        print(
+            f"{'ID':<5} {'Date':<12} {'Description':<20} {'Category':<15} {'Type':<10} {'Amount':>12} {'Created At':<12}")
         print("-" * 90)
         # Print each transaction row
-        for t in rows:
-            print(f"{t[0]:<5} {t[1]:<10.2f} {t[2]:<15} {t[3]:<15} {t[4]:<40} {t[5]:<12} {t[6]:<12}")
+        for row in rows:
+            tid = row[0]
+            date = row[1]
+            description = row[2] if row[2] else ""
+            category = row[3]
+            t_type = row[4]
+            amount = f"${row[5]:,.2f}"
+            created_at = row[6][:10]  # slice to YYYY-MM-DD only
+            print(f"{tid:<5} {date:<12} {description:<20} {category:<15} {t_type:<10} {amount:>12} {created_at:<12}")
 
     conn.close()
 
@@ -294,6 +302,7 @@ def update_transaction():
 def search_transaction():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
+
     # Ask for ID and validate
     while True:
         try:
@@ -310,20 +319,28 @@ def search_transaction():
 
     # Fetch transaction details with category name
     c.execute("""
-            SELECT t.id, t.amount, t.transaction_type, c.name, t.description, t.date, t.created_at
-            FROM transactions t
-            INNER JOIN categories c ON t.category_id = c.id
-            WHERE t.id = ?
-        """, (transaction_id,))
+        SELECT t.id, t.date, t.description, c.name, t.transaction_type, t.amount, t.created_at
+        FROM transactions t
+        INNER JOIN categories c ON t.category_id = c.id
+        WHERE t.id = ?
+    """, (transaction_id,))
 
     transaction = c.fetchone()
     if transaction:
         print("\n==== Transaction Details ====\n")
-        print(
-            f"{'ID':<5} {'Amount':<10} {'Type':<15} {'Category':<15} {'Description':<40} {'Date':<12} {'Created At':<12}")
+        # Print headers
+        print(f"{'ID':<5} {'Date':<12} {'Description':<20} {'Category':<15} {'Type':<10} {'Amount':>12} {'Created At':<12}")
         print("-" * 90)
-        print(
-            f"{transaction[0]:<5} {transaction[1]:<10.2f} {transaction[2]:<15} {transaction[3]:<15} {transaction[4]:<20} {transaction[5]:<12} {transaction[6]:<12}")
+        # Print row
+        tid = transaction[0]
+        date = transaction[1]
+        description = transaction[2] if transaction[2] else ""
+        category = transaction[3]
+        t_type = transaction[4]
+        amount = f"${transaction[5]:,.2f}"
+        created_at = transaction[6][:10]  # slice to YYYY-MM-DD
+        print(f"{tid:<5} {date:<12} {description:<20} {category:<15} {t_type:<10} {amount:>12} {created_at:<12}")
+
     conn.close()
 
 

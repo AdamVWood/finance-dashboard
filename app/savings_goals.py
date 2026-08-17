@@ -75,22 +75,31 @@ def view_savings_goals():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
     c.execute("""
-        SELECT g.id, g.name, c.name, g.target_amount, g.current_amount, g.deadline, g.created_at
-        FROM savings_goals g
-        INNER JOIN categories c ON g.category_id = c.id
+        SELECT id, name, target_amount, current_amount, deadline, created_at
+        FROM savings_goals
+        ORDER BY deadline ASC
     """)
     rows = c.fetchall()
 
     if not rows:
         print("No savings goals found.")
     else:
-        print("\n==== Savings Goals ====\n")
-        print(f"{'ID':<5} {'Name':<20} {'Category':<15} {'Target':<10} {'Current':<10} {'Deadline':<12} {'Created At':<12}")
-        print("-" * 100)
-        for g in rows:
-            print(f"{g[0]:<5} {g[1]:<20} {g[2]:<15} {g[3]:<10.2f} {g[4]:<10.2f} {g[5]:<12} {g[6]:<12}")
+        print("\n==== Savings Goals Overview ====\n")
+        # Print headers
+        print(f"{'ID':<5} {'Name':<20} {'Target':>12} {'Current':>12} {'Deadline':<12} {'Created At':<12}")
+        print("-" * 80)
+        # Print each savings goal row
+        for row in rows:
+            sid = row[0]
+            name = row[1]
+            target = f"${row[2]:,.2f}"
+            current = f"${row[3]:,.2f}"
+            deadline = row[4]
+            created_at = row[5][:10]  # slice to YYYY-MM-DD
+            print(f"{sid:<5} {name:<20} {target:>12} {current:>12} {deadline:<12} {created_at:<12}")
 
     conn.close()
+
 
 
 def delete_savings_goal():
@@ -231,29 +240,41 @@ def search_savings_goal():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
 
+    # Ask for ID and validate
     while True:
         try:
-            goal_id = int(input("Enter the ID of the savings goal to search: "))
+            goal_id = int(input("What is the ID of the savings goal you want to search: "))
+            # Check if goal exists
             c.execute("SELECT id FROM savings_goals WHERE id = ?", (goal_id,))
-            if c.fetchone() is None:
-                print("Invalid ID. Savings goal does not exist.")
+            result = c.fetchone()
+            if result is None:
+                print("Invalid ID. Savings goal does not exist.\n")
                 continue
             break
         except ValueError:
-            print("Invalid input. Please enter a number.")
+            print("Invalid input. Please enter a valid number.")
 
+    # Fetch savings goal details
     c.execute("""
-        SELECT g.id, g.name, c.name, g.target_amount, g.current_amount, g.deadline, g.created_at
-        FROM savings_goals g
-        INNER JOIN categories c ON g.category_id = c.id
-        WHERE g.id = ?
+        SELECT id, name, target_amount, current_amount, deadline, created_at
+        FROM savings_goals
+        WHERE id = ?
     """, (goal_id,))
+
     goal = c.fetchone()
     if goal:
         print("\n==== Savings Goal Details ====\n")
-        print(f"{'ID':<5} {'Name':<20} {'Category':<15} {'Target':<10} {'Current':<10} {'Deadline':<12} {'Created At':<12}")
-        print("-" * 100)
-        print(f"{goal[0]:<5} {goal[1]:<20} {goal[2]:<15} {goal[3]:<10.2f} {goal[4]:<10.2f} {goal[5]:<12} {goal[6]:<12}")
+        # Print headers
+        print(f"{'ID':<5} {'Name':<20} {'Target':>12} {'Current':>12} {'Deadline':<12} {'Created At':<12}")
+        print("-" * 80)
+        # Print row
+        sid = goal[0]
+        name = goal[1]
+        target = f"${goal[2]:,.2f}"
+        current = f"${goal[3]:,.2f}"
+        deadline = goal[4]
+        created_at = goal[5][:10]  # slice to YYYY-MM-DD
+        print(f"{sid:<5} {name:<20} {target:>12} {current:>12} {deadline:<12} {created_at:<12}")
 
     conn.close()
 

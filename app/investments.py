@@ -2,6 +2,7 @@ import sqlite3
 import datetime
 from app.categories import category_exists
 
+
 def add_investment():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
@@ -87,24 +88,127 @@ def add_investment():
     print("\nInvestment added successfully.")
 
 
+def filter_investments(mode="all"):
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+
+    query = """
+        SELECT id, name, ticker, asset_type, quantity, purchase_price, purchase_date, created_at
+        FROM investments
+    """
+    params = []
+    order_clause = ""
+
+    if mode == "keyword":
+        keyword = input("Enter keyword (name/ticker/type): ").strip()
+        if not keyword:
+            print("Error: Keyword cannot be empty.")
+            conn.close()
+            return
+        query += " WHERE name LIKE ? OR ticker LIKE ? OR asset_type LIKE ?"
+        params = [f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"]
+
+    elif mode == "type":
+        asset_type = input("Enter asset type (Equity, Bond, Crypto, etc.): ").strip()
+        if not asset_type:
+            print("Error: Asset type cannot be empty.")
+            conn.close()
+            return
+        # Optional: enforce known types
+        valid_types = ["Equity", "Bond", "Crypto", "ETF", "Mutual Fund"]
+        if asset_type not in valid_types:
+            print(f"Error: '{asset_type}' is not a recognized type. Valid options: {', '.join(valid_types)}")
+            conn.close()
+            return
+        query += " WHERE asset_type = ?"
+        params = [asset_type]
+
+    elif mode == "date":
+        import datetime
+        start_date = input("Enter start date (YYYY-MM-DD): ").strip()
+        end_date = input("Enter end date (YYYY-MM-DD): ").strip()
+
+        try:
+            start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+            end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d")
+            if start_dt > end_dt:
+                print("Error: Start date cannot be after end date.")
+                conn.close()
+                return
+        except ValueError:
+            print("Error: Dates must be in YYYY-MM-DD format.")
+            conn.close()
+            return
+
+        query += " WHERE purchase_date BETWEEN ? AND ?"
+        params = [start_date, end_date]
+
+    elif mode == "sort_date":
+        order_clause = " ORDER BY purchase_date DESC"
+
+    elif mode == "sort_value":
+        query = """
+            SELECT id, name, ticker, asset_type, quantity, purchase_price, purchase_date, created_at,
+                   (quantity * purchase_price) AS total_value
+            FROM investments
+            ORDER BY total_value DESC
+        """
+
+    elif mode == "all":
+        order_clause = " ORDER BY purchase_date DESC"
+
+    # Execute query
+    c.execute(query + order_clause, params)
+    rows = c.fetchall()
+
+    if not rows:
+        print("No matching investments found.")
+    else:
+        print("\n==== Investments ====\n")
+        print(f"{'ID':<5} {'Name':<20} {'Ticker':<10} {'Type':<12} {'Qty':>8} {'Price':>12} {'Date':<12} {'Created At':<12}")
+        print("-" * 95)
+        for row in rows:
+            iid = row[0]
+            name = row[1]
+            ticker = row[2]
+            asset_type = row[3]
+            qty = row[4]
+            price = f"${row[5]:,.2f}"
+            purchase_date = row[6]
+            created_at = row[7][:10]
+            print(f"{iid:<5} {name:<20} {ticker:<10} {asset_type:<12} {qty:>8} {price:>12} {purchase_date:<12} {created_at:<12}")
+
+    conn.close()
+
+
 def view_investments():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
     c.execute("""
-        SELECT i.id, i.name, i.ticker, i.asset_type, c.name, i.quantity, i.purchase_price, i.purchase_date, i.created_at
-        FROM investments i
-        INNER JOIN categories c ON i.category_id = c.id
+        SELECT id, name, ticker, asset_type, quantity, purchase_price, purchase_date, created_at
+        FROM investments
+        ORDER BY purchase_date DESC
     """)
     rows = c.fetchall()
 
     if not rows:
         print("No investments found.")
     else:
-        print("\n==== Investments ====\n")
-        print(f"{'ID':<5} {'Name':<20} {'Ticker':<10} {'Type':<10} {'Category':<15} {'Quantity':<10} {'Price':<10} {'Date':<12} {'Created At':<12}")
-        print("-" * 100)
-        for inv in rows:
-            print(f"{inv[0]:<5} {inv[1]:<20} {inv[2]:<10} {inv[3]:<10} {inv[4]:<15} {inv[5]:<10.2f} {inv[6]:<10.2f} {inv[7]:<12} {inv[8]:<12}")
+        print("\n==== Investments Overview ====\n")
+        # Print headers
+        print(f"{'ID':<5} {'Name':<20} {'Ticker':<10} {'Type':<12} {'Qty':>8} {'Price':>12} {'Date':<12} {'Created At':<12}")
+        print("-" * 95)
+        # Print each investment row
+        for row in rows:
+            iid = row[0]
+            name = row[1]
+            ticker = row[2]
+            asset_type = row[3]
+            qty = row[4]
+            price = f"${row[5]:,.2f}"
+            purchase_date = row[6]
+            created_at = row[7][:10]  # slice to YYYY-MM-DD
+            print(f"{iid:<5} {name:<20} {ticker:<10} {asset_type:<12} {qty:>8} {price:>12} {purchase_date:<12} {created_at:<12}")
 
     conn.close()
 
@@ -239,24 +343,43 @@ def search_investment():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
 
+    # Ask for ID and validate
     while True:
         try:
-            inv_id = int(input("Enter the ID of the investment to search: "))
-            c.execute("SELECT id FROM investments WHERE id = ?", (inv_id,))
-            if c.fetchone() is None:
-                print("Invalid ID. Investment does not exist.")
+            investment_id = int(input("What is the ID of the investment you want to search: "))
+            # Check if investment exists
+            c.execute("SELECT id FROM investments WHERE id = ?", (investment_id,))
+            result = c.fetchone()
+            if result is None:
+                print("Invalid ID. Investment does not exist.\n")
                 continue
             break
         except ValueError:
-            print("Invalid input. Please enter a number.")
+            print("Invalid input. Please enter a valid number.")
 
-    c.execute("SELECT id, name, ticker, asset_type, quantity, purchase_price, purchase_date FROM investments WHERE id = ?", (inv_id,))
-    inv = c.fetchone()
-    if inv:
+    # Fetch investment details
+    c.execute("""
+        SELECT id, name, ticker, asset_type, quantity, purchase_price, purchase_date, created_at
+        FROM investments
+        WHERE id = ?
+    """, (investment_id,))
+
+    investment = c.fetchone()
+    if investment:
         print("\n==== Investment Details ====\n")
-        print(f"{'ID':<5} {'Name':<20} {'Ticker':<10} {'Type':<10} {'Quantity':<10} {'Price':<10} {'Date':<12}")
-        print("-" * 80)
-        print(f"{inv[0]:<5} {inv[1]:<20} {inv[2]:<10} {inv[3]:<10} {inv[4]:<10.2f} {inv[5]:<10.2f} {inv[6]:<12}")
+        # Print headers
+        print(f"{'ID':<5} {'Name':<20} {'Ticker':<10} {'Type':<12} {'Qty':>8} {'Price':>12} {'Date':<12} {'Created At':<12}")
+        print("-" * 95)
+        # Print row
+        iid = investment[0]
+        name = investment[1]
+        ticker = investment[2]
+        asset_type = investment[3]
+        qty = investment[4]
+        price = f"${investment[5]:,.2f}"
+        purchase_date = investment[6]
+        created_at = investment[7][:10]  # slice to YYYY-MM-DD
+        print(f"{iid:<5} {name:<20} {ticker:<10} {asset_type:<12} {qty:>8} {price:>12} {purchase_date:<12} {created_at:<12}")
 
     conn.close()
 
@@ -294,8 +417,9 @@ def menu():
     while True:
         print("\n==== Investments Menu ====")
         print("1: Add Investment")
-        print("2: View Investments")
-        print("3: Financial Actions (update/search/delete)")
+        print("2: View/Filter Investments")
+        print("3: Search Investment by ID")
+        print("4: Financial Actions (update/delete)")
         print("0: Back to Dashboard")
 
         try:
@@ -303,13 +427,43 @@ def menu():
             if choice == 1:
                 add_investment()
             elif choice == 2:
-                view_investments()
+                # Submenu for viewing/filtering
+                while True:
+                    print("\n==== View/Filter Investments ====")
+                    print("1: View all investments")
+                    print("2: Search by keyword (name/ticker/type)")
+                    print("3: Filter by type")
+                    print("4: Filter by purchase date range")
+                    print("5: Sort by purchase date")
+                    print("6: Sort by total value")
+                    print("0: Back")
+
+                    sub_choice = input("Select an option: ").strip()
+
+                    if sub_choice == "1":
+                        view_investments()
+                    elif sub_choice == "2":
+                        filter_investments("keyword")
+                    elif sub_choice == "3":
+                        filter_investments("type")
+                    elif sub_choice == "4":
+                        filter_investments("date")
+                    elif sub_choice == "5":
+                        filter_investments("sort_date")
+                    elif sub_choice == "6":
+                        filter_investments("sort_value")
+                    elif sub_choice == "0":
+                        break
+                    else:
+                        print("Invalid choice. Please enter 0–6.")
+
             elif choice == 3:
-                financial_actions()
+                search_investment()  # ID-based search
+            elif choice == 4:
+                financial_actions()  # update/delete
             elif choice == 0:
                 break
             else:
-                print("Invalid choice. Please enter 0–3.")
+                print("Invalid choice. Please enter 0–4.")
         except ValueError:
             print("Invalid input. Please enter a number.")
-

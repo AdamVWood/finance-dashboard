@@ -28,16 +28,27 @@ def add_category():
 def view_categories():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
-    c.execute("SELECT id, name FROM categories")
+    c.execute("""
+        SELECT id, name, created_at
+        FROM categories
+        ORDER BY name ASC
+    """)
     rows = c.fetchall()
+
     if not rows:
         print("No categories found.")
     else:
-        print("\n==== Categories ====\n")
-        print(f"{'ID':<5} {'Name':<20}")
-        print("-" * 30)
-        for cat in rows:
-            print(f"{cat[0]:<5} {cat[1]:<20}")
+        print("\n==== Categories Overview ====\n")
+        # Print headers
+        print(f"{'ID':<5} {'Name':<20} {'Created At':<12}")
+        print("-" * 40)
+        # Print each category row
+        for row in rows:
+            cid = row[0]
+            name = row[1]
+            created_at = row[2][:10]  # slice to YYYY-MM-DD
+            print(f"{cid:<5} {name:<20} {created_at:<12}")
+
     conn.close()
 
 
@@ -110,23 +121,39 @@ def update_category():
 def search_category():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
+
+    # Ask for ID and validate
     while True:
         try:
-            cat_id = int(input("Enter the ID of the category to search: "))
-            c.execute("SELECT id FROM categories WHERE id = ?", (cat_id,))
-            if c.fetchone() is None:
-                print("Invalid ID. Category does not exist.")
+            category_id = int(input("What is the ID of the category you want to search: "))
+            # Check if category exists
+            c.execute("SELECT id FROM categories WHERE id = ?", (category_id,))
+            result = c.fetchone()
+            if result is None:
+                print("Invalid ID. Category does not exist.\n")
                 continue
             break
         except ValueError:
-            print("Invalid input. Please enter a number.")
+            print("Invalid input. Please enter a valid number.")
 
-    cat = c.execute("SELECT id, name FROM categories WHERE id = ?", (cat_id,)).fetchone()
-    if cat:
+    # Fetch category details
+    c.execute("""
+        SELECT id, name, created_at
+        FROM categories
+        WHERE id = ?
+    """, (category_id,))
+
+    category = c.fetchone()
+    if category:
         print("\n==== Category Details ====\n")
-        print(f"{'ID':<5} {'Name':<20}")
-        print("-" * 30)
-        print(f"{cat[0]:<5} {cat[1]:<20}")
+        # Print headers
+        print(f"{'ID':<5} {'Name':<20} {'Created At':<12}")
+        print("-" * 40)
+        # Print row
+        cid = category[0]
+        name = category[1]
+        created_at = category[2][:10]  # slice to YYYY-MM-DD
+        print(f"{cid:<5} {name:<20} {created_at:<12}")
 
     conn.close()
 

@@ -74,13 +74,19 @@ def view_budgets():
     if not rows:
         print("No budgets found.")
     else:
-        print("\n==== Budget History ====\n")
+        print("\n==== Budgets Overview ====\n")
         # Print headers
-        print(f"{'ID':<5} {'Category':<15} {'Amount':<10} {'month':<2} {'year':<4}")
-        print("-" * 90)
+        print(f"{'ID':<5} {'Amount':>12} {'Category':<15} {'Month':<8} {'Year':<6} {'Created At':<12}")
+        print("-" * 70)
         # Print each budget row
-        for b in rows:
-            print(f"{b[0]:<5} {b[1]:<15} {b[2]:<10.2f} {b[3]:<2} {b[4]:<4}")
+        for row in rows:
+            bid = row[0]
+            amount = f"${row[1]:,.2f}"
+            category = row[2]
+            month = row[3]
+            year = row[4]
+            created_at = row[5][:10]  # slice to YYYY-MM-DD
+            print(f"{bid:<5} {amount:>12} {category:<15} {month:<8} {year:<6} {created_at:<12}")
 
     conn.close()
 
@@ -226,6 +232,7 @@ def update_budget():
 def search_budget():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
+
     # Ask for ID and validate
     while True:
         try:
@@ -242,18 +249,27 @@ def search_budget():
 
     # Fetch budget details with category name
     c.execute("""
-            SELECT b.id, c.name, b.amount, b.month, b.year
-            FROM budgets b
-            INNER JOIN categories c ON b.category_id = c.id
-            WHERE b.id = ?
-            """, (budget_id,))
+        SELECT b.id, b.amount, c.name, b.month, b.year, b.created_at
+        FROM budgets b
+        INNER JOIN categories c ON b.category_id = c.id
+        WHERE b.id = ?
+    """, (budget_id,))
 
     budget = c.fetchone()
     if budget:
         print("\n==== Budget Details ====\n")
-        print(f"{'ID':<5} {'Category':<15} {'Amount':<10} {'month':<2} {'year':<4}")
-        print("-" * 90)
-        print(f"{budget[0]:<5} {budget[1]:<15} {budget[2]:<10.2f} {budget[3]:<2} {budget[4]:<4}")
+        # Print headers
+        print(f"{'ID':<5} {'Amount':>12} {'Category':<15} {'Month':<8} {'Year':<6} {'Created At':<12}")
+        print("-" * 70)
+        # Print row
+        bid = budget[0]
+        amount = f"${budget[1]:,.2f}"
+        category = budget[2]
+        month = budget[3]
+        year = budget[4]
+        created_at = budget[5][:10]  # slice to YYYY-MM-DD
+        print(f"{bid:<5} {amount:>12} {category:<15} {month:<8} {year:<6} {created_at:<12}")
+
     conn.close()
 
 
