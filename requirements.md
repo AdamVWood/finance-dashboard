@@ -1,18 +1,3 @@
-# Phase 4 — Personal Budget & Investment Dashboard
-
-**Goal:** Transform your Phase 2 Personal Finance Tracker into a polished, full-stack financial dashboard that combines **Python, SQLite, HTML, CSS, JavaScript, data visualization, and financial analysis**.
-
-The key is that this should feel like a **new, substantially more advanced project**, not simply "Finance Tracker but with a website."
-
----
-
-# 10-Day Roadmap
-
-## Day 1 — Plan & Design
-
-### 1. Define the application
-
-Decide exactly what the application is going to manage:
 
 **Core areas**
 

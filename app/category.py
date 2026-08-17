@@ -1,5 +1,6 @@
 import sqlite3
 
+
 def category_exists(category_id):
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
