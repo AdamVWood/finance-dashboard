@@ -88,3 +88,53 @@ def report_investments():
         print(f"{row[0]:<20} ({row[1]:<10}) Category: {row[2]:<15} Qty: {row[3]:.2f} Price: {row[4]:.2f} Total Value: {total_value:.2f} Date: {row[5]}")
     conn.close()
 
+
+def menu():
+    while True:
+        print("\n==== Financial Reports Menu ====")
+        print("1: Income vs Expenses")
+        print("2: Spending by Category")
+        print("3: Budget vs Actual")
+        print("4: Savings Goals Progress")
+        print("5: Investments Overview")
+        print("0: Back to Dashboard")
+
+        try:
+            choice = int(input("Select an option: "))
+            if choice == 1:
+                report_income_expenses()
+            elif choice == 2:
+                report_spending_by_category()
+            elif choice == 3:
+                # Ask for month/year before running
+                while True:
+                    try:
+                        month = int(input("Enter month (1-12): "))
+                        if month < 1 or month > 12:
+                            print("Month must be between 1 and 12.")
+                            continue
+                        break
+                    except ValueError:
+                        print("Invalid input. Please enter a number between 1 and 12.")
+
+                while True:
+                    try:
+                        year = int(input("Enter year (YYYY): "))
+                        if year < 1000 or year > 9999:
+                            print("Year must be a four-digit number.")
+                            continue
+                        break
+                    except ValueError:
+                        print("Invalid input. Please enter a valid year (YYYY).")
+
+                report_budget_vs_actual(month, year)
+            elif choice == 4:
+                report_savings_goals()
+            elif choice == 5:
+                report_investments()
+            elif choice == 0:
+                break
+            else:
+                print("Invalid choice. Please enter 0–5.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")

@@ -1,9 +1,10 @@
-import transactions
-import budgets
-import savings
-import investments
-import category
-import financial_report
+from app import transactions
+from app import budgets
+from app import savings_goals
+from app import investments
+from app import categories
+from app import financial_report
+
 
 def main_menu():
     while True:
@@ -19,17 +20,17 @@ def main_menu():
         try:
             choice = int(input("Select an option: "))
             if choice == 1:
-                transactions.financial_actions()
+                transactions.menu()
             elif choice == 2:
-                budgets.financial_actions()
+                budgets.menu()
             elif choice == 3:
-                savings.financial_actions()
+                savings_goals.menu()
             elif choice == 4:
-                investments.financial_actions()
+                investments.menu()
             elif choice == 5:
-                category.financial_actions()
+                categories.menu()
             elif choice == 6:
-                financial_report.financial_actions()
+                financial_report.menu()
             elif choice == 0:
                 print("Goodbye!")
                 break
@@ -38,5 +39,4 @@ def main_menu():
         except ValueError:
             print("Invalid input. Please enter a number.")
 
-if __name__ == "__main__":
-    main_menu()
+

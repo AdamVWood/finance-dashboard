@@ -1,6 +1,6 @@
 import sqlite3
 import datetime
-from category import category_exists
+from app.categories import category_exists
 
 def add_transaction():
     conn = sqlite3.connect('database/finance.db')
@@ -354,3 +354,27 @@ def financial_actions():
         except ValueError:
             print("Invalid input. Please enter 1, 2, or 3.")
     conn.close()
+
+
+def menu():
+    while True:
+        print("\n==== Transactions Menu ====")
+        print("1: Add Transaction")
+        print("2: View Transactions")
+        print("3: Financial Actions (update/search/delete)")
+        print("0: Back to Dashboard")
+
+        try:
+            choice = int(input("Select an option: "))
+            if choice == 1:
+                add_transaction()
+            elif choice == 2:
+                view_transactions()
+            elif choice == 3:
+                financial_actions()
+            elif choice == 0:
+                break
+            else:
+                print("Invalid choice. Please enter 0–3.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")

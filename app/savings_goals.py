@@ -1,6 +1,6 @@
 import sqlite3
 import datetime
-from category import category_exists
+from app.categories import category_exists
 
 def add_savings_goal():
     conn = sqlite3.connect('database/finance.db')
@@ -285,3 +285,27 @@ def financial_actions():
         except ValueError:
             print("Invalid input. Please enter 1, 2, or 3.")
     conn.close()
+
+
+def menu():
+    while True:
+        print("\n==== Saving Goal Menu ====")
+        print("1: Add Saving Goal")
+        print("2: View Saving Goals")
+        print("3: Financial Actions (update/search/delete)")
+        print("0: Back to Dashboard")
+
+        try:
+            choice = int(input("Select an option: "))
+            if choice == 1:
+                add_savings_goal()
+            elif choice == 2:
+                view_savings_goals()
+            elif choice == 3:
+                financial_actions()
+            elif choice == 0:
+                break
+            else:
+                print("Invalid choice. Please enter 0–3.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")

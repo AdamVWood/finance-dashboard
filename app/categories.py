@@ -158,3 +158,28 @@ def financial_actions():
         except ValueError:
             print("Invalid input. Please enter 1, 2, or 3.")
     conn.close()
+
+
+def menu():
+    while True:
+        print("\n==== Categories Menu ====")
+        print("1: Add Category")
+        print("2: View Categories")
+        print("3: Financial Actions (update/search/delete)")
+        print("0: Back to Dashboard")
+
+        try:
+            choice = int(input("Select an option: "))
+            if choice == 1:
+                add_category()
+            elif choice == 2:
+                view_categories()
+            elif choice == 3:
+                financial_actions()
+            elif choice == 0:
+                break
+            else:
+                print("Invalid choice. Please enter 0–3.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+
