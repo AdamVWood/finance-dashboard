@@ -1,9 +1,4 @@
-from app import transactions #done
-from app import budgets #done
-from app import savings_goals #done
-from app import investments #done
-from app import categories
-from app import financial_report
+from app import transactions, budgets, savings_goals, investments, categories, financial_report
 
 
 def main_menu():
@@ -38,5 +33,4 @@ def main_menu():
                 print("Invalid choice. Please enter a number between 0 and 6.")
         except ValueError:
             print("Invalid input. Please enter a number.")
-
 

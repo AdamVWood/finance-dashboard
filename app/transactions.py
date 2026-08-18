@@ -2,6 +2,7 @@ import sqlite3
 import datetime
 from app.categories import category_exists
 
+
 def add_transaction():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
@@ -87,6 +88,35 @@ def add_transaction():
     conn.close()
 
 
+def get_date_range(option):
+    today = datetime.date.today()
+    if option == "this_month":
+        start = today.replace(day=1)
+        end = today
+    elif option == "last_month":
+        first_this_month = today.replace(day=1)
+        last_month_end = first_this_month - datetime.timedelta(days=1)
+        start = last_month_end.replace(day=1)
+        end = last_month_end
+    elif option == "last_3_months":
+        start_month = today.month - 2
+        start_year = today.year
+        if start_month <= 0:
+            start_month += 12
+            start_year -= 1
+        start = datetime.date(start_year, start_month, 1)
+        end = today
+    elif option == "this_year":
+        start = datetime.date(today.year, 1, 1)
+        end = today
+    elif option == "all_time":
+        start = datetime.date(1970, 1, 1)  # effectively no limit
+        end = today
+    else:
+        return None, None
+    return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
+
+
 def filter_transactions(mode="all"):
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
@@ -107,6 +137,32 @@ def filter_transactions(mode="all"):
             return
         query += " WHERE t.description LIKE ? OR c.name LIKE ? OR t.transaction_type LIKE ?"
         params = [f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"]
+
+    elif mode == "range":
+        print("\nSelect a date range:")
+        print("1: This Month")
+        print("2: Last Month")
+        print("3: Last 3 Months")
+        print("4: This Year")
+        print("5: All Time")
+
+        choice = input("Enter choice: ").strip()
+        ranges = {
+            "1": "this_month",
+            "2": "last_month",
+            "3": "last_3_months",
+            "4": "this_year",
+            "5": "all_time"
+        }
+
+        if choice not in ranges:
+            print("Invalid choice.")
+            conn.close()
+            return
+
+        start_date, end_date = get_date_range(ranges[choice])
+        query += " WHERE t.date BETWEEN ? AND ?"
+        params = [start_date, end_date]
 
     elif mode == "category":
         category = input("Enter category name: ").strip()
@@ -482,9 +538,10 @@ def menu():
                     print("2: Search by keyword")
                     print("3: Filter by category")
                     print("4: Filter by type")
-                    print("5: Filter by date range")
-                    print("6: Sort by date")
-                    print("7: Sort by amount")
+                    print("5: Filter by date range (manual)")
+                    print("6: Quick date range selector")  # new option
+                    print("7: Sort by date")
+                    print("8: Sort by amount")
                     print("0: Back")
 
                     sub_choice = input("Select an option: ").strip()
@@ -500,13 +557,15 @@ def menu():
                     elif sub_choice == "5":
                         filter_transactions("date")
                     elif sub_choice == "6":
-                        filter_transactions("sort_date")
+                        filter_transactions("range")  # new mode
                     elif sub_choice == "7":
+                        filter_transactions("sort_date")
+                    elif sub_choice == "8":
                         filter_transactions("sort_amount")
                     elif sub_choice == "0":
                         break
                     else:
-                        print("Invalid choice. Please enter 0–7.")
+                        print("Invalid choice. Please enter 0–8.")
 
             elif choice == 3:
                 search_transaction()

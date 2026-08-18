@@ -3,6 +3,35 @@ import datetime
 from app.categories import category_exists
 
 
+def get_date_range(option):
+    today = datetime.date.today()
+    if option == "this_month":
+        start = today.replace(day=1)
+        end = today
+    elif option == "last_month":
+        first_this_month = today.replace(day=1)
+        last_month_end = first_this_month - datetime.timedelta(days=1)
+        start = last_month_end.replace(day=1)
+        end = last_month_end
+    elif option == "last_3_months":
+        start_month = today.month - 2
+        start_year = today.year
+        if start_month <= 0:
+            start_month += 12
+            start_year -= 1
+        start = datetime.date(start_year, start_month, 1)
+        end = today
+    elif option == "this_year":
+        start = datetime.date(today.year, 1, 1)
+        end = today
+    elif option == "all_time":
+        start = datetime.date(1970, 1, 1)  # effectively no limit
+        end = today
+    else:
+        return None, None
+    return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
+
+
 def add_investment():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
@@ -24,10 +53,11 @@ def add_investment():
             break
 
     # Asset type: cannot be empty
+    valid_types = ["Stock", "ETF", "Bond", "Crypto", "Other"]
     while True:
-        asset_type = input("Enter the asset type (e.g., Stock, Bond, ETF): ").strip()
-        if asset_type == "":
-            print("Asset type cannot be empty.")
+        asset_type = input(f"Enter the asset type ({', '.join(valid_types)}): ").strip().title()
+        if asset_type not in valid_types:
+            print(f"Invalid asset type. Please choose from: {', '.join(valid_types)}")
         else:
             break
 
@@ -109,13 +139,12 @@ def filter_investments(mode="all"):
         params = [f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"]
 
     elif mode == "type":
-        asset_type = input("Enter asset type (Equity, Bond, Crypto, etc.): ").strip()
+        valid_types = ["Stock", "ETF", "Bond", "Crypto", "Other"]
+        asset_type = input(f"Enter asset type ({', '.join(valid_types)}): ").strip().title()
         if not asset_type:
             print("Error: Asset type cannot be empty.")
             conn.close()
             return
-        # Optional: enforce known types
-        valid_types = ["Equity", "Bond", "Crypto", "ETF", "Mutual Fund"]
         if asset_type not in valid_types:
             print(f"Error: '{asset_type}' is not a recognized type. Valid options: {', '.join(valid_types)}")
             conn.close()
@@ -143,6 +172,32 @@ def filter_investments(mode="all"):
         query += " WHERE purchase_date BETWEEN ? AND ?"
         params = [start_date, end_date]
 
+    elif mode == "range":
+        print("\nSelect a date range:")
+        print("1: This Month")
+        print("2: Last Month")
+        print("3: Last 3 Months")
+        print("4: This Year")
+        print("5: All Time")
+
+        choice = input("Enter choice: ").strip()
+        ranges = {
+            "1": "this_month",
+            "2": "last_month",
+            "3": "last_3_months",
+            "4": "this_year",
+            "5": "all_time"
+        }
+
+        if choice not in ranges:
+            print("Invalid choice.")
+            conn.close()
+            return
+
+        start_date, end_date = get_date_range(ranges[choice])
+        query += " WHERE purchase_date BETWEEN ? AND ?"
+        params = [start_date, end_date]
+
     elif mode == "sort_date":
         order_clause = " ORDER BY purchase_date DESC"
 
@@ -156,6 +211,32 @@ def filter_investments(mode="all"):
 
     elif mode == "all":
         order_clause = " ORDER BY purchase_date DESC"
+
+    elif mode == "range":
+        print("\nSelect a date range:")
+        print("1: This Month")
+        print("2: Last Month")
+        print("3: Last 3 Months")
+        print("4: This Year")
+        print("5: All Time")
+
+        choice = input("Enter choice: ").strip()
+        ranges = {
+            "1": "this_month",
+            "2": "last_month",
+            "3": "last_3_months",
+            "4": "this_year",
+            "5": "all_time"
+        }
+
+        if choice not in ranges:
+            print("Invalid choice.")
+            conn.close()
+            return
+
+        start_date, end_date = get_date_range(ranges[choice])
+        query += " WHERE t.date BETWEEN ? AND ?"
+        params = [start_date, end_date]
 
     # Execute query
     c.execute(query + order_clause, params)
@@ -282,9 +363,15 @@ def update_investment():
                 new_ticker = input("Enter new ticker: ").strip().upper()
                 c.execute("UPDATE investments SET ticker = ? WHERE id = ?", (new_ticker, inv_id))
             elif choice == 3:
+                valid_types = ["Stock", "ETF", "Bond", "Crypto", "Other"]
                 old_type = c.execute("SELECT asset_type FROM investments WHERE id = ?", (inv_id,)).fetchone()[0]
                 print("\nOld asset type:", old_type)
-                new_type = input("Enter new asset type: ").strip()
+                while True:
+                    new_type = input(f"Enter new asset type ({', '.join(valid_types)}): ").strip().title()
+                    if new_type not in valid_types:
+                        print(f"Invalid asset type. Please choose from: {', '.join(valid_types)}")
+                    else:
+                        break
                 c.execute("UPDATE investments SET asset_type = ? WHERE id = ?", (new_type, inv_id))
             elif choice == 4:
                 old_cat = c.execute("SELECT category_id FROM investments WHERE id = ?", (inv_id,)).fetchone()[0]
@@ -436,6 +523,7 @@ def menu():
                     print("4: Filter by purchase date range")
                     print("5: Sort by purchase date")
                     print("6: Sort by total value")
+                    print("7: Quick date range selector")
                     print("0: Back")
 
                     sub_choice = input("Select an option: ").strip()
@@ -452,10 +540,13 @@ def menu():
                         filter_investments("sort_date")
                     elif sub_choice == "6":
                         filter_investments("sort_value")
+                    elif sub_choice == "7":
+                        filter_investments("range")  # <-- new mode
                     elif sub_choice == "0":
                         break
                     else:
-                        print("Invalid choice. Please enter 0–6.")
+                        print("Invalid choice. Please enter 0–7.")
+
 
             elif choice == 3:
                 search_investment()  # ID-based search

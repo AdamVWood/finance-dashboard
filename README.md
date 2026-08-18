@@ -1,15 +1,5 @@
 # Planned Enhancements
 
-## 1. Investments
-- Standardize asset types to:
-Stock
-ETF
-Bond
-Crypto
-Other
-
-Code
-
 ## 2. Transactions
 - Add full edit/delete functionality for every transaction.
 - Require confirmation before deletion.
@@ -19,8 +9,6 @@ Last Month
 Last 3 Months
 This Year
 All Time
-
-Code
 
 ## 3. Budgets
 - Redesign budget tracking to show progress visually:
