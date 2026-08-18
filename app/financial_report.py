@@ -1,31 +1,37 @@
 import sqlite3
 
 
-def report_portfolio_summary():
+def report_portfolio_overview():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
     c.execute("""
-        SELECT SUM(quantity * purchase_price) AS invested
+        SELECT name, ticker, quantity, purchase_price, purchase_date
         FROM investments
     """)
-    total_invested = c.fetchone()[0] or 0
+    rows = c.fetchall()
 
-    # For now, assume current value = purchase price * quantity
-    # Later you could integrate live market data
-    c.execute("""
-        SELECT SUM(quantity * purchase_price) AS current_value
-        FROM investments
-    """)
-    current_value = c.fetchone()[0] or 0
+    total_invested = 0
+    total_value = 0
+    holdings = len(rows)
 
-    profit_loss = current_value - total_invested
+    print("\n==== Portfolio Overview ====\n")
+    for row in rows:
+        qty = float(row[2] or 0)
+        price = float(row[3] or 0)
+        invested = qty * price
+        total_invested += invested
+        total_value += invested  # later replace with live market value if available
+        print(f"{row[0]:<20} ({row[1]:<10}) Qty: {qty:.2f} Price: {price:.2f} Total Value: {invested:.2f} Date: {row[4]}")
+
+    profit_loss = total_value - total_invested
     return_pct = (profit_loss / total_invested * 100) if total_invested > 0 else 0
 
     print("\n==== Portfolio Summary ====\n")
     print(f"Total Invested: {total_invested:.2f}")
-    print(f"Current Value: {current_value:.2f}")
+    print(f"Current Portfolio Value: {total_value:.2f}")
     print(f"Profit/Loss: {profit_loss:.2f}")
-    print(f"Return %: {return_pct:.2f}%")
+    print(f"Return Percentage: {return_pct:.2f}%")
+    print(f"Number of Holdings: {holdings}")
 
     conn.close()
 
@@ -238,9 +244,49 @@ def menu():
                 report_savings_goals()
             elif choice == 5:
                 report_investments()
+            elif choice == 6:
+                report_portfolio_overview()
+            elif choice == 7:
+                # Ask for month/year before running dashboard
+                while True:
+                    try:
+                        month = int(input("Enter month (1-12): "))
+                        if month < 1 or month > 12:
+                            print("Month must be between 1 and 12.")
+                            continue
+                        break
+                    except ValueError:
+                        print("Invalid input. Please enter a number between 1 and 12.")
+
+                while True:
+                    try:
+                        year = int(input("Enter year (YYYY): "))
+                        if year < 1000 or year > 9999:
+                            print("Year must be a four-digit number.")
+                            continue
+                        break
+                    except ValueError:
+                        print("Invalid input. Please enter a valid year (YYYY).")
+
+                report_budget_dashboard(month, year)
+            elif choice == 8:
+                report_savings_goals_insights()
+            elif choice == 9:
+                while True:
+                    try:
+                        year = int(input("Enter year (YYYY): "))
+                        if year < 1000 or year > 9999:
+                            print("Year must be a four-digit number.")
+                            continue
+                        break
+                    except ValueError:
+                        print("Invalid input. Please enter a valid year (YYYY).")
+
+                report_monthly_income_expenses(year)
             elif choice == 0:
                 break
             else:
-                print("Invalid choice. Please enter 0–5.")
+                print("Invalid choice. Please enter 0–9.")
         except ValueError:
             print("Invalid input. Please enter a number.")
+

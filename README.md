@@ -1,6 +1,6 @@
 # Planned Enhancements
 
-## 3. Budgets
+## 1. Budgets
 - Redesign budget tracking to show progress visually:
 Food
 $372 / $500
@@ -20,7 +20,7 @@ Code
 - Categories over budget
 - Categories approaching their limits
 
-## 4. Savings Goals
+## 2. Savings Goals
 - Introduce a dedicated savings goals system.
 - Each goal includes:
 - Name
@@ -46,15 +46,8 @@ Code
 - Required monthly contribution
 - On-track status
 
-## 5. Portfolio Overview / Financial Reports
-- Redesign reporting to include:
-- Total invested
-- Current portfolio value
-- Profit/loss
-- Return percentage
-- Number of holdings
 
-## 6. User Experience
+## 3. User Experience
 - Add a FAQ page to improve onboarding and answer common questions.
 - Enable Excel integration:
 - **Export**: Generate a sheet for easier bulk data entry.
