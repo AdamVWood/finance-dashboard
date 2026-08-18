@@ -195,7 +195,6 @@ def financial_actions():
     conn.close()
 
 
-
 def menu():
     while True:
         print("\n==== Categories Menu ====")

@@ -1,6 +1,96 @@
 import sqlite3
 
 
+def report_portfolio_summary():
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+    c.execute("""
+        SELECT SUM(quantity * purchase_price) AS invested
+        FROM investments
+    """)
+    total_invested = c.fetchone()[0] or 0
+
+    # For now, assume current value = purchase price * quantity
+    # Later you could integrate live market data
+    c.execute("""
+        SELECT SUM(quantity * purchase_price) AS current_value
+        FROM investments
+    """)
+    current_value = c.fetchone()[0] or 0
+
+    profit_loss = current_value - total_invested
+    return_pct = (profit_loss / total_invested * 100) if total_invested > 0 else 0
+
+    print("\n==== Portfolio Summary ====\n")
+    print(f"Total Invested: {total_invested:.2f}")
+    print(f"Current Value: {current_value:.2f}")
+    print(f"Profit/Loss: {profit_loss:.2f}")
+    print(f"Return %: {return_pct:.2f}%")
+
+    conn.close()
+
+
+def report_budget_dashboard(month, year):
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+    c.execute("""
+        SELECT SUM(b.amount), IFNULL(SUM(t.amount),0)
+        FROM budgets b
+        LEFT JOIN transactions t
+        ON b.category_id = t.category_id
+        AND strftime('%m', t.date) = ? AND strftime('%Y', t.date) = ?
+    """, (f"{month:02d}", str(year)))
+    totals = c.fetchone()
+    total_budget = totals[0] or 0
+    total_spent = totals[1] or 0
+    remaining = total_budget - total_spent
+    pct_used = (total_spent / total_budget * 100) if total_budget > 0 else 0
+
+    print(f"\n==== Budget Dashboard ({month}/{year}) ====\n")
+    print(f"Total Budget: {total_budget:.2f}")
+    print(f"Total Spent: {total_spent:.2f}")
+    print(f"Remaining: {remaining:.2f}")
+    print(f"Percentage Used: {pct_used:.1f}%")
+
+    conn.close()
+
+
+def report_savings_goals_insights():
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+    c.execute("""
+        SELECT name, target_amount, current_amount, deadline
+        FROM savings_goals
+    """)
+    rows = c.fetchall()
+    print("\n==== Savings Goals Insights ====\n")
+    for row in rows:
+        name, target, current, deadline = row
+        remaining = (target or 0) - (current or 0)
+        pct_complete = (current / target * 100) if target else 0
+        print(f"{name:<20} Target: {target:.2f} | Current: {current:.2f} | Remaining: {remaining:.2f} | Progress: {pct_complete:.1f}% | Deadline: {deadline}")
+    conn.close()
+
+
+def report_monthly_income_expenses(year):
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+    c.execute("""
+        SELECT strftime('%m', date) AS month,
+               SUM(CASE WHEN transaction_type='Deposit' THEN amount ELSE 0 END) AS income,
+               SUM(CASE WHEN transaction_type='Withdrawal' THEN amount ELSE 0 END) AS expenses
+        FROM transactions
+        WHERE strftime('%Y', date) = ?
+        GROUP BY month
+        ORDER BY month
+    """, (str(year),))
+    rows = c.fetchall()
+    print(f"\n==== Monthly Income vs Expenses ({year}) ====\n")
+    for row in rows:
+        print(f"Month {row[0]}: Income {row[1]:.2f} | Expenses {row[2]:.2f}")
+    conn.close()
+
+
 def report_income_expenses():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
@@ -97,6 +187,10 @@ def menu():
         print("3: Budget vs Actual")
         print("4: Savings Goals Progress")
         print("5: Investments Overview")
+        print("6: Portfolio Summary")
+        print("7: Budget Dashboard")
+        print("8: Savings Goals Insights")
+        print("9: Monthly Income vs Expenses")
         print("0: Back to Dashboard")
 
         try:
