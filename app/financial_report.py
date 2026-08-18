@@ -66,9 +66,21 @@ def report_savings_goals_insights():
     print("\n==== Savings Goals Insights ====\n")
     for row in rows:
         name, target, current, deadline = row
-        remaining = (target or 0) - (current or 0)
-        pct_complete = (current / target * 100) if target else 0
-        print(f"{name:<20} Target: {target:.2f} | Current: {current:.2f} | Remaining: {remaining:.2f} | Progress: {pct_complete:.1f}% | Deadline: {deadline}")
+
+        # Ensure numeric values are safely cast to float
+        target = float(target or 0)
+        current = float(current or 0)
+        remaining = target - current
+        pct_complete = (current / target * 100) if target > 0 else 0
+
+        print(
+            f"{name:<20} Target: {target:.2f} | "
+            f"Current: {current:.2f} | "
+            f"Remaining: {remaining:.2f} | "
+            f"Progress: {pct_complete:.1f}% | "
+            f"Deadline: {deadline}"
+        )
+
     conn.close()
 
 

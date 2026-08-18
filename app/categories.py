@@ -1,6 +1,5 @@
 import sqlite3
 
-
 def category_exists(category_id):
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
@@ -42,8 +41,13 @@ def add_category():
         name = input("Enter category name: ").strip()
         if name == "":
             print("Category name cannot be empty.")
-        else:
-            break
+            continue
+        # Check for duplicates
+        c.execute("SELECT id FROM categories WHERE LOWER(name) = LOWER(?)", (name,))
+        if c.fetchone():
+            print("Category with this name already exists.")
+            continue
+        break
     c.execute("INSERT INTO categories (name) VALUES (?)", (name,))
     conn.commit()
     conn.close()
@@ -63,9 +67,7 @@ def view_categories():
         print(f"{'ID':<5} {'Name':<20}")
         print("-" * 30)
         for row in rows:
-            cid = row[0]
-            name = row[1]
-            print(f"{cid:<5} {name:<20}")
+            print(f"{row[0]:<5} {row[1]:<20}")
 
     conn.close()
 
@@ -98,6 +100,11 @@ def delete_category():
         print("-" * 30)
         print(f"{cat[0]:<5} {cat[1]:<20}")
 
+    # Warn if linked to transactions/budgets/investments
+    c.execute("SELECT COUNT(*) FROM transactions WHERE category_id = ?", (cat_id,))
+    if c.fetchone()[0] > 0:
+        print("Warning: This category is linked to transactions.")
+
     confirm = input("Are you sure you want to delete this category? (y/n): ").lower()
     if confirm == "y":
         c.execute("DELETE FROM categories WHERE id = ?", (cat_id,))
@@ -129,9 +136,14 @@ def update_category():
     if new_name == "":
         print("Category name cannot be empty.")
     else:
-        c.execute("UPDATE categories SET name = ? WHERE id = ?", (new_name, cat_id))
-        conn.commit()
-        print("\nCategory updated.")
+        # Check for duplicates
+        c.execute("SELECT id FROM categories WHERE LOWER(name) = LOWER(?) AND id != ?", (new_name, cat_id))
+        if c.fetchone():
+            print("Category with this name already exists.")
+        else:
+            c.execute("UPDATE categories SET name = ? WHERE id = ?", (new_name, cat_id))
+            conn.commit()
+            print("\nCategory updated.")
 
     conn.close()
 
@@ -146,7 +158,7 @@ def search_category():
         conn.close()
         return
 
-    c.execute("SELECT id, name FROM categories WHERE name LIKE ?", (f"%{keyword}%",))
+    c.execute("SELECT id, name FROM categories WHERE LOWER(name) LIKE LOWER(?)", (f"%{keyword}%",))
     rows = c.fetchall()
 
     if not rows:
@@ -156,9 +168,7 @@ def search_category():
         print(f"{'ID':<5} {'Name':<20}")
         print("-" * 30)
         for row in rows:
-            cid = row[0]
-            name = row[1]
-            print(f"{cid:<5} {name:<20}")
+            print(f"{row[0]:<5} {row[1]:<20}")
 
     conn.close()
 
@@ -223,4 +233,3 @@ def menu():
                 print("Invalid choice. Please enter 0–5.")
         except ValueError:
             print("Invalid input. Please enter a number.")
-
