@@ -3,6 +3,92 @@ import datetime
 from app.categories import category_exists
 
 
+def budget_dashboard():
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+
+    # Get all budgets with category names
+    c.execute("""
+        SELECT b.id, b.category_id, c.name, b.amount, b.month, b.year
+        FROM budgets b
+        INNER JOIN categories c ON b.category_id = c.id
+    """)
+    budgets = c.fetchall()
+
+    total_budget = 0.0
+    total_spent = 0.0
+    over_budget = []
+    near_limit = []
+
+    for bid, cat_id, cat_name, amount, month, year in budgets:
+        amount = float(amount or 0)
+        total_budget += amount
+
+        # Sum transactions for this category/month/year
+        c.execute("""
+            SELECT SUM(amount) FROM transactions
+            WHERE category_id = ? AND transaction_type = 'Expense'
+              AND strftime('%m', date) = ? AND strftime('%Y', date) = ?
+        """, (cat_id, f"{month:02d}", str(year)))
+        spent = c.fetchone()[0]
+        spent = float(spent or 0)
+        total_spent += spent
+
+        progress = (spent / amount * 100) if amount > 0 else 0
+        if progress > 100:
+            over_budget.append(cat_name)
+            state = "Over budget"
+        elif progress >= 80:
+            near_limit.append(cat_name)
+            state = "Near limit"
+        else:
+            state = "Under budget"
+
+        # Print per‑category progress bar
+        bar_length = 20
+        filled = int(bar_length * progress / 100)
+        bar = "█" * filled + "░" * (bar_length - filled)
+
+        print(f"\n{cat_name}")
+        print(f"${spent:.2f} / ${amount:.2f}")
+        print(f"{bar} {progress:.0f}%")
+        print(f"Status: {state}")
+
+    remaining = total_budget - total_spent
+    percent_used = (total_spent / total_budget) * 100 if total_budget > 0 else 0
+
+    print("\n==== Budget Dashboard ====")
+    print(f"Total Budget: ${total_budget:.2f}")
+    print(f"Total Spent: ${total_spent:.2f}")
+    print(f"Remaining: ${remaining:.2f}")
+    print(f"Percentage Used: {percent_used:.0f}%")
+    print(f"Categories Over Budget: {', '.join(over_budget) if over_budget else 'None'}")
+    print(f"Categories Near Limit: {', '.join(near_limit) if near_limit else 'None'}")
+
+    conn.close()
+
+
+def budget_summary():
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+    c.execute("SELECT SUM(amount) FROM budgets")
+    total_budget = float(c.fetchone()[0] or 0)
+
+    c.execute("SELECT SUM(amount) FROM transactions WHERE transaction_type = 'Expense'")
+    total_spent = float(c.fetchone()[0] or 0)
+
+    remaining = total_budget - total_spent
+    percent_used = (total_spent / total_budget * 100) if total_budget > 0 else 0
+
+    print("\n==== Quick Budget Summary ====")
+    print(f"Total Budget: ${total_budget:.2f}")
+    print(f"Total Spent: ${total_spent:.2f}")
+    print(f"Remaining: ${remaining:.2f}")
+    print(f"Percentage Used: {percent_used:.0f}%")
+
+    conn.close()
+
+
 def add_budget():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
@@ -56,6 +142,11 @@ def add_budget():
             print("Invalid input. Please enter a valid year.")
 
     created_at = datetime.datetime.today().strftime("%Y-%m-%d")
+    c.execute("SELECT id FROM budgets WHERE category_id = ? AND month = ? AND year = ?", (category, month, year))
+    if c.fetchone():
+        print("A budget for this category and period already exists.")
+        conn.close()
+        return
 
     c.execute('''
         INSERT INTO budgets (category_id, amount, month, year, created_at)
@@ -217,7 +308,7 @@ def view_budgets():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
     c.execute("""
-        SELECT b.id, c.name, b.amount, b.month, b.year
+        SELECT b.id, c.name, b.amount, b.month, b.year, b.created_at
         FROM budgets b
         INNER JOIN categories c ON b.category_id = c.id
     """)
@@ -233,8 +324,8 @@ def view_budgets():
         # Print each budget row
         for row in rows:
             bid = row[0]
-            amount = f"${row[1]:,.2f}"
-            category = row[2]
+            amount = f"${row[2]:,.2f}"
+            category = row[1]
             month = row[3]
             year = row[4]
             created_at = row[5][:10]  # slice to YYYY-MM-DD
@@ -461,6 +552,8 @@ def menu():
         print("2: View/Filter Budgets")
         print("3: Search Budget by ID")
         print("4: Financial Actions (update/delete)")
+        print("5: Budget Dashboard")
+        print("6: Quick Summary")
         print("0: Back to Dashboard")
 
         try:
@@ -507,6 +600,10 @@ def menu():
                 search_budget()
             elif choice == 4:
                 financial_actions()
+            elif choice == 5:
+                budget_dashboard()
+            elif choice == 6:
+                budget_summary()
             elif choice == 0:
                 break
             else:
