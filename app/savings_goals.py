@@ -2,6 +2,62 @@ import sqlite3
 import datetime
 from app.categories import category_exists
 
+
+def add_money_to_goal():
+    conn = sqlite3.connect('database/finance.db')
+    c = conn.cursor()
+
+    goal_id = int(input("Enter the ID of the savings goal to update: "))
+    c.execute("SELECT target_amount, current_amount, deadline FROM savings_goals WHERE id = ?", (goal_id,))
+    goal = c.fetchone()
+
+    if not goal:
+        print("Savings goal not found.")
+        conn.close()
+        return
+
+    target, current, deadline = goal
+    target = float(target or 0)
+    current = float(current or 0)
+
+    try:
+        add_amount = float(input("Enter the amount to add: "))
+        if add_amount <= 0:
+            print("Amount must be greater than 0.")
+            conn.close()
+            return
+    except ValueError:
+        print("Invalid input.")
+        conn.close()
+        return
+
+    new_current = current + add_amount
+    c.execute("UPDATE savings_goals SET current_amount = ? WHERE id = ?", (new_current, goal_id))
+    conn.commit()
+
+    # Calculate progress
+    remaining = target - new_current
+    progress = (new_current / target * 100) if target > 0 else 0
+
+    # Required monthly contribution
+    deadline_date = datetime.datetime.strptime(deadline, "%Y-%m-%d")
+    months_left = max(1, (deadline_date.year - datetime.date.today().year) * 12 +
+                         (deadline_date.month - datetime.date.today().month))
+    required_monthly = remaining / months_left if remaining > 0 else 0
+
+    # On-track status
+    state = "On track" if progress >= (100 * (datetime.date.today().month / 12)) else "Behind schedule"
+
+    print("\n==== Updated Savings Goal ====")
+    print(f"Current: ${new_current:.2f} / Target: ${target:.2f}")
+    print(f"Remaining: ${remaining:.2f}")
+    print(f"Progress: {progress:.0f}%")
+    print(f"Required Monthly Contribution: ${required_monthly:.2f}")
+    print(f"Status: {state}")
+
+    conn.close()
+
+
 def add_savings_goal():
     conn = sqlite3.connect('database/finance.db')
     c = conn.cursor()
@@ -147,7 +203,6 @@ def filter_savings_goals(mode="all"):
         params = [start_date, end_date]
 
     elif mode == "date":
-        import datetime
         start_date = input("Enter start deadline (YYYY-MM-DD): ").strip()
         end_date = input("Enter end deadline (YYYY-MM-DD): ").strip()
         try:
@@ -183,16 +238,28 @@ def filter_savings_goals(mode="all"):
         print("No matching savings goals found.")
     else:
         print("\n==== Savings Goals ====\n")
-        print(f"{'ID':<5} {'Name':<20} {'Target':>12} {'Current':>12} {'Deadline':<12} {'Created At':<12}")
-        print("-" * 80)
         for row in rows:
             sid = row[0]
             name = row[1]
-            target = f"${row[2]:,.2f}"
-            current = f"${row[3]:,.2f}"
+            target = float(row[2] or 0)
+            current = float(row[3] or 0)
             deadline = row[4]
-            created_at = row[5][:10]
-            print(f"{sid:<5} {name:<20} {target:>12} {current:>12} {deadline:<12} {created_at:<12}")
+            created_at = row[5][:10]  # slice to YYYY-MM-DD
+
+            progress = (current / target * 100) if target > 0 else 0
+            remaining = target - current
+
+            # Progress bar
+            bar_length = 20
+            filled = int(bar_length * progress / 100)
+            bar = "█" * filled + "░" * (bar_length - filled)
+
+            print(f"\n{name} (ID: {sid})")
+            print(f"${current:.2f} / ${target:.2f}")
+            print(f"{bar} {progress:.0f}%")
+            print(f"Remaining: ${remaining:.2f}")
+            print(f"Deadline: {deadline}")
+            print(f"Created At: {created_at}")
 
     conn.close()
 
@@ -211,18 +278,29 @@ def view_savings_goals():
         print("No savings goals found.")
     else:
         print("\n==== Savings Goals Overview ====\n")
-        # Print headers
-        print(f"{'ID':<5} {'Name':<20} {'Target':>12} {'Current':>12} {'Deadline':<12} {'Created At':<12}")
-        print("-" * 80)
-        # Print each savings goal row
         for row in rows:
             sid = row[0]
             name = row[1]
-            target = f"${row[2]:,.2f}"
-            current = f"${row[3]:,.2f}"
+            target = float(row[2] or 0)
+            current = float(row[3] or 0)
             deadline = row[4]
-            created_at = row[5][:10]  # slice to YYYY-MM-DD
-            print(f"{sid:<5} {name:<20} {target:>12} {current:>12} {deadline:<12} {created_at:<12}")
+            # Inline slice avoids “unused variable” warning
+            created_at_str = row[5][:10]
+
+            progress = (current / target * 100) if target > 0 else 0
+            remaining = target - current
+
+            # Progress bar
+            bar_length = 20
+            filled = int(bar_length * progress / 100)
+            bar = "█" * filled + "░" * (bar_length - filled)
+
+            print(f"\n{name} (ID: {sid})")
+            print(f"${current:.2f} / ${target:.2f}")
+            print(f"{bar} {progress:.0f}%")
+            print(f"Remaining: ${remaining:.2f}")
+            print(f"Deadline: {deadline}")
+            print(f"Created At: {created_at_str}")
 
     conn.close()
 
@@ -289,71 +367,67 @@ def update_savings_goal():
 
     while True:
         try:
-            choice = int(input("Which field do you want to edit?\n1: Name\n2: Target Amount\n3: Current Amount\n4: Deadline\n5: Category ID\n"))
+            choice = int(input("Which field do you want to edit?\n"
+                               "1: Name\n2: Target Amount\n3: Current Amount\n4: Deadline\n5: Category ID\n"))
             if choice == 1:
-                old_name = c.execute("SELECT name FROM savings_goals WHERE id = ?", (goal_id,)).fetchone()[0]
-                print("\nOld name:", old_name)
                 new_name = input("Enter new name: ").strip()
                 c.execute("UPDATE savings_goals SET name = ? WHERE id = ?", (new_name, goal_id))
             elif choice == 2:
-                old_target = c.execute("SELECT target_amount FROM savings_goals WHERE id = ?", (goal_id,)).fetchone()[0]
-                print("\nOld target amount:", old_target)
-                while True:
-                    try:
-                        new_target = float(input("Enter new target amount: "))
-                        if new_target <= 0:
-                            print("Target must be greater than 0.")
-                            continue
-                        break
-                    except ValueError:
-                        print("Invalid input. Please enter a number.")
+                new_target = float(input("Enter new target amount: "))
                 c.execute("UPDATE savings_goals SET target_amount = ? WHERE id = ?", (new_target, goal_id))
             elif choice == 3:
-                old_current = c.execute("SELECT current_amount FROM savings_goals WHERE id = ?", (goal_id,)).fetchone()[0]
-                print("\nOld current amount:", old_current)
-                while True:
-                    try:
-                        new_current = float(input("Enter new current amount: "))
-                        if new_current < 0:
-                            print("Current amount cannot be negative.")
-                            continue
-                        break
-                    except ValueError:
-                        print("Invalid input. Please enter a number.")
+                new_current = float(input("Enter new current amount: "))
                 c.execute("UPDATE savings_goals SET current_amount = ? WHERE id = ?", (new_current, goal_id))
             elif choice == 4:
-                old_deadline = c.execute("SELECT deadline FROM savings_goals WHERE id = ?", (goal_id,)).fetchone()[0]
-                print("\nOld deadline:", old_deadline)
-                while True:
-                    new_deadline = input("Enter new deadline (YYYY-MM-DD): ").strip()
-                    try:
-                        datetime.datetime.strptime(new_deadline, "%Y-%m-%d")
-                        break
-                    except ValueError:
-                        print("Invalid date format. Please use YYYY-MM-DD.")
+                new_deadline = input("Enter new deadline (YYYY-MM-DD): ").strip()
+                datetime.datetime.strptime(new_deadline, "%Y-%m-%d")  # validate
                 c.execute("UPDATE savings_goals SET deadline = ? WHERE id = ?", (new_deadline, goal_id))
             elif choice == 5:
-                old_cat = c.execute("SELECT category_id FROM savings_goals WHERE id = ?", (goal_id,)).fetchone()[0]
-                print("\nOld category id:", old_cat)
-                while True:
-                    try:
-                        category_id = int(input("Enter new category ID: "))
-                        if category_id > 0:
-                            if category_exists(category_id):
-                                break
-                            else:
-                                print("Category does not exist.")
-                        else:
-                            print("Category ID must be a positive integer.")
-                    except ValueError:
-                        print("Please enter a valid category ID.")
-                c.execute("UPDATE savings_goals SET category_id = ? WHERE id = ?", (category_id, goal_id))
+                new_cat = int(input("Enter new category ID: "))
+                if category_exists(new_cat):
+                    c.execute("UPDATE savings_goals SET category_id = ? WHERE id = ?", (new_cat, goal_id))
+                else:
+                    print("Category does not exist.")
+                    continue
             else:
                 print("Please enter a number between 1 and 5.")
                 continue
 
             conn.commit()
             print("\nSavings goal updated.")
+
+            # Fetch updated goal and show dashboard-style summary
+            c.execute("""
+                SELECT id, name, target_amount, current_amount, deadline, created_at
+                FROM savings_goals WHERE id = ?
+            """, (goal_id,))
+            goal = c.fetchone()
+            if goal:
+                sid, name, target, current, deadline, created_at = goal
+                target = float(target or 0)
+                current = float(current or 0)
+                progress = (current / target * 100) if target > 0 else 0
+                remaining = target - current
+
+                bar_length = 20
+                filled = int(bar_length * progress / 100)
+                bar = "█" * filled + "░" * (bar_length - filled)
+
+                deadline_date = datetime.datetime.strptime(deadline, "%Y-%m-%d")
+                months_left = max(1, (deadline_date.year - datetime.date.today().year) * 12 +
+                                     (deadline_date.month - datetime.date.today().month))
+                required_monthly = remaining / months_left if remaining > 0 else 0
+                state = "On track" if progress >= (100 * (datetime.date.today().month / 12)) else "Behind schedule"
+
+                print(f"\n{name} (ID: {sid})")
+                print(f"${current:.2f} / ${target:.2f}")
+                print(f"{bar} {progress:.0f}%")
+                print(f"Remaining: ${remaining:.2f}")
+                print(f"Deadline: {deadline}")
+                print(f"Created At: {created_at[:10]}")
+                print(f"Required Monthly Contribution: ${required_monthly:.2f}")
+                print(f"Status: {state}")
+
             break
         except ValueError:
             print("Invalid input. Please enter a number between 1 and 5.")
@@ -388,18 +462,39 @@ def search_savings_goal():
 
     goal = c.fetchone()
     if goal:
-        print("\n==== Savings Goal Details ====\n")
-        # Print headers
-        print(f"{'ID':<5} {'Name':<20} {'Target':>12} {'Current':>12} {'Deadline':<12} {'Created At':<12}")
-        print("-" * 80)
-        # Print row
         sid = goal[0]
         name = goal[1]
-        target = f"${goal[2]:,.2f}"
-        current = f"${goal[3]:,.2f}"
+        target = float(goal[2] or 0)
+        current = float(goal[3] or 0)
         deadline = goal[4]
-        created_at = goal[5][:10]  # slice to YYYY-MM-DD
-        print(f"{sid:<5} {name:<20} {target:>12} {current:>12} {deadline:<12} {created_at:<12}")
+        created_at_str = goal[5][:10]
+
+        progress = (current / target * 100) if target > 0 else 0
+        remaining = target - current
+
+        # Progress bar
+        bar_length = 20
+        filled = int(bar_length * progress / 100)
+        bar = "█" * filled + "░" * (bar_length - filled)
+
+        # Required monthly contribution
+        deadline_date = datetime.datetime.strptime(deadline, "%Y-%m-%d")
+        months_left = max(1, (deadline_date.year - datetime.date.today().year) * 12 +
+                             (deadline_date.month - datetime.date.today().month))
+        required_monthly = remaining / months_left if remaining > 0 else 0
+
+        # On-track status (simple heuristic)
+        state = "On track" if progress >= (100 * (datetime.date.today().month / 12)) else "Behind schedule"
+
+        print("\n==== Savings Goal Details ====\n")
+        print(f"{name} (ID: {sid})")
+        print(f"${current:.2f} / ${target:.2f}")
+        print(f"{bar} {progress:.0f}%")
+        print(f"Remaining: ${remaining:.2f}")
+        print(f"Deadline: {deadline}")
+        print(f"Created At: {created_at_str}")
+        print(f"Required Monthly Contribution: ${required_monthly:.2f}")
+        print(f"Status: {state}")
 
     conn.close()
 
@@ -440,6 +535,7 @@ def menu():
         print("2: View/Filter Savings Goals")
         print("3: Search Savings Goal by ID")
         print("4: Financial Actions (update/delete)")
+        print("5: Add Money to Savings Goal")
         print("0: Back to Dashboard")
 
         try:
@@ -483,6 +579,8 @@ def menu():
                 search_savings_goal()
             elif choice == 4:
                 financial_actions()
+            elif choice == 5:
+                add_money_to_goal()
             elif choice == 0:
                 break
             else:
