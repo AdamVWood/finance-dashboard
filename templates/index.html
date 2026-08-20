@@ -2,9 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>Finance Dashboard</title>
 </head>
 <body>
-
+<h1>Finance Dashboard</h1>
+<ul>
+    <li><a href="{{ url_for('transactions_page') }}">Manage Transactions</a></li>
+    <li><a href="{{ url_for('budgets_page') }}">Manage Budgets</a></li>
+    <li><a href="{{ url_for('savings_page') }}">Manage Savings Goals</a></li>
+    <li><a href="{{ url_for('investments_page') }}">Manage Investments</a></li>
+    <li><a href="{{ url_for('categories_page') }}">Manage Categories</a></li>
+    <li><a href="{{ url_for('reports_page') }}">Financial Reports</a></li>
+</ul>
 </body>
 </html>
