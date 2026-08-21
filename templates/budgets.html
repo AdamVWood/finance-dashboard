@@ -2,9 +2,96 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>Budgets</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/forms.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tables.css') }}">
 </head>
 <body>
+<a href="{{ url_for('dashboard') }}">&larr; Dashboard</a>
+<h1>Budgets</h1>
 
+{% if error %}
+<div class="error-box">
+    <ul>
+        {% for e in error %}
+        <li>{{ e }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<p>
+    <a href="{{ url_for('budget_summary_route') }}" target="_blank">Quick Summary (JSON)</a> &middot;
+    <a href="{{ url_for('budget_dashboard_route') }}" target="_blank">Full Dashboard (JSON)</a>
+</p>
+
+<section class="filters">
+    <form method="get" action="{{ url_for('budgets_page') }}">
+        <select name="mode" onchange="this.form.submit()">
+            <option value="all" {% if mode == "all" %}selected{% endif %}>All</option>
+            <option value="sort_date" {% if mode == "sort_date" %}selected{% endif %}>Sort by Created Date</option>
+            <option value="sort_amount" {% if mode == "sort_amount" %}selected{% endif %}>Sort by Amount</option>
+            <option value="category" {% if mode == "category" %}selected{% endif %}>Filter by Category</option>
+            <option value="month_year" {% if mode == "month_year" %}selected{% endif %}>Filter by Month/Year</option>
+            <option value="keyword" {% if mode == "keyword" %}selected{% endif %}>Search Keyword</option>
+            <option value="range" {% if mode == "range" %}selected{% endif %}>Quick Range</option>
+        </select>
+
+        <input type="text" name="keyword" placeholder="Keyword">
+        <input type="text" name="category" placeholder="Category name">
+        <input type="number" name="month" placeholder="Month" min="1" max="12">
+        <input type="number" name="year" placeholder="Year">
+
+        <select name="range_option">
+            <option value="">-- Quick Range --</option>
+            <option value="this_month">This Month</option>
+            <option value="last_month">Last Month</option>
+            <option value="last_3_months">Last 3 Months</option>
+            <option value="this_year">This Year</option>
+            <option value="all_time">All Time</option>
+        </select>
+
+        <button type="submit">Apply</button>
+    </form>
+</section>
+
+<table class="data-table">
+    <thead>
+    <tr>
+        <th>ID</th><th>Category</th><th>Amount</th><th>Month</th><th>Year</th><th>Created</th><th></th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for b in budgets %}
+    <tr>
+        <td>{{ b.id }}</td>
+        <td>{{ b.category_name }}</td>
+        <td>${{ "%.2f"|format(b.amount) }}</td>
+        <td>{{ b.month }}</td>
+        <td>{{ b.year }}</td>
+        <td>{{ b.created_at[:10] }}</td>
+        <td>
+            <form method="post" action="{{ url_for('delete_budget_route', budget_id=b.id) }}"
+                  onsubmit="return confirm('Delete this budget?');" style="display:inline">
+                <button type="submit">Delete</button>
+            </form>
+        </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7">No matching budgets found.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Add Budget</h2>
+<form method="post" action="{{ url_for('add_budget_route') }}" class="add-form">
+    <input type="number" name="category_id" placeholder="Category ID" required>
+    <input type="number" step="any" name="amount" placeholder="Amount" required>
+    <input type="number" name="month" placeholder="Month (1-12)" min="1" max="12" required>
+    <input type="number" name="year" placeholder="Year" required>
+    <button type="submit">Add Budget</button>
+</form>
 </body>
 </html>

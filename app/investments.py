@@ -1,9 +1,12 @@
-import sqlite3
 import datetime
 from app.categories import category_exists
+from database.database import get_connection
+
+VALID_TYPES = ["Stock", "ETF", "Bond", "Crypto", "Other"]
 
 
 def get_date_range(option):
+    """Returns (start_date_str, end_date_str) for a named range option, or (None, None) if invalid."""
     today = datetime.date.today()
     if option == "this_month":
         start = today.replace(day=1)
@@ -25,176 +28,153 @@ def get_date_range(option):
         start = datetime.date(today.year, 1, 1)
         end = today
     elif option == "all_time":
-        start = datetime.date(1970, 1, 1)  # effectively no limit
+        start = datetime.date(1970, 1, 1)
         end = today
     else:
         return None, None
     return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
 
 
-def add_investment():
-    conn = sqlite3.connect('database/finance.db')
-    c = conn.cursor()
+def add_investment(data):
+    errors = []
 
-    # Name: cannot be empty
-    while True:
-        name = input("Enter the investment name: ").strip()
-        if name == "":
-            print("Name cannot be empty.")
-        else:
-            break
+    name = (data.get("name") or "").strip()
+    if not name:
+        errors.append("Name cannot be empty.")
 
-    # Ticker: cannot be empty
-    while True:
-        ticker = input("Enter the ticker symbol: ").strip().upper()
-        if ticker == "":
-            print("Ticker cannot be empty.")
-        else:
-            break
+    ticker = (data.get("ticker") or "").strip().upper()
+    if not ticker:
+        errors.append("Ticker cannot be empty.")
 
-    # Asset type: cannot be empty
-    valid_types = ["Stock", "ETF", "Bond", "Crypto", "Other"]
-    while True:
-        asset_type = input(f"Enter the asset type ({', '.join(valid_types)}): ").strip().title()
-        if asset_type not in valid_types:
-            print(f"Invalid asset type. Please choose from: {', '.join(valid_types)}")
-        else:
-            break
+    asset_type = (data.get("asset_type") or "").strip().title()
+    if asset_type not in VALID_TYPES:
+        errors.append(f"Invalid asset type. Must be one of: {', '.join(VALID_TYPES)}")
 
-    # Category: must exist
-    while True:
-        try:
-            category_id = int(input("Enter the category ID: "))
-            if category_id > 0:
-                if category_exists(category_id):
-                    break
-                else:
-                    print("Category does not exist.")
-            else:
-                print("Category ID must be a positive integer.")
-        except ValueError:
-            print("Please enter a valid category ID.")
+    category_id = None
+    try:
+        category_id = int(data.get("category_id"))
+        if category_id <= 0:
+            errors.append("Category ID must be a positive integer.")
+        elif not category_exists(category_id):
+            errors.append("Category does not exist.")
+    except (TypeError, ValueError):
+        errors.append("Category ID must be a valid integer.")
 
-    # Quantity: must be positive
-    while True:
-        try:
-            quantity = float(input("Enter the quantity: "))
-            if quantity <= 0:
-                print("Quantity must be greater than 0.")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter a number.")
+    quantity = None
+    try:
+        quantity = float(data.get("quantity"))
+        if quantity <= 0:
+            errors.append("Quantity must be greater than 0.")
+    except (TypeError, ValueError):
+        errors.append("Quantity must be a valid number.")
 
-    # Purchase price: must be positive
-    while True:
-        try:
-            purchase_price = float(input("Enter the purchase price: "))
-            if purchase_price <= 0:
-                print("Purchase price must be greater than 0.")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter a number.")
+    purchase_price = None
+    try:
+        purchase_price = float(data.get("purchase_price"))
+        if purchase_price <= 0:
+            errors.append("Purchase price must be greater than 0.")
+    except (TypeError, ValueError):
+        errors.append("Purchase price must be a valid number.")
 
-    # Purchase date: must match YYYY-MM-DD
-    while True:
-        purchase_date = input("Enter the purchase date (YYYY-MM-DD): ").strip()
-        try:
-            datetime.datetime.strptime(purchase_date, "%Y-%m-%d")
-            break
-        except ValueError:
-            print("Invalid date format. Please use YYYY-MM-DD.")
+    purchase_date = (data.get("purchase_date") or "").strip()
+    try:
+        datetime.datetime.strptime(purchase_date, "%Y-%m-%d")
+    except ValueError:
+        errors.append("Purchase date must be in YYYY-MM-DD format.")
+
+    if errors:
+        return False, errors
 
     created_at = datetime.datetime.today().strftime("%Y-%m-%d")
 
+    conn = get_connection()
+    c = conn.cursor()
     c.execute('''
-        INSERT INTO investments (name, ticker, asset_type, category_id, quantity, purchase_price, purchase_date, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (name, ticker, asset_type, category_id, quantity, purchase_price, purchase_date, created_at))
-
+              INSERT INTO investments (name, ticker, asset_type, category_id, quantity, purchase_price, purchase_date, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              ''', (name, ticker, asset_type, category_id, quantity, purchase_price, purchase_date, created_at))
     conn.commit()
+    new_id = c.lastrowid
     conn.close()
-    print("\nInvestment added successfully.")
+
+    return True, {"id": new_id}
 
 
-def filter_investments(mode="all"):
-    conn = sqlite3.connect('database/finance.db')
+def get_all_investments():
+    """Returns a list of dicts, one per investment, sorted by purchase_date desc."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+              SELECT id, name, ticker, asset_type, category_id, quantity, purchase_price, purchase_date, created_at
+              FROM investments
+              ORDER BY purchase_date DESC
+              """)
+    rows = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_investment(investment_id):
+    """Returns a single investment dict, or None if it doesn't exist."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+              SELECT id, name, ticker, asset_type, category_id, quantity, purchase_price, purchase_date, created_at
+              FROM investments WHERE id = ?
+              """, (investment_id,))
+    row = c.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def filter_investments(mode="all", **kwargs):
+    conn = get_connection()
     c = conn.cursor()
 
     query = """
-        SELECT id, name, ticker, asset_type, quantity, purchase_price, purchase_date, created_at
-        FROM investments
-    """
+            SELECT id, name, ticker, asset_type, category_id, quantity, purchase_price, purchase_date, created_at
+            FROM investments \
+            """
     params = []
     order_clause = ""
 
     if mode == "keyword":
-        keyword = input("Enter keyword (name/ticker/type): ").strip()
+        keyword = (kwargs.get("keyword") or "").strip()
         if not keyword:
-            print("Error: Keyword cannot be empty.")
             conn.close()
-            return
+            return False, "Keyword cannot be empty."
         query += " WHERE name LIKE ? OR ticker LIKE ? OR asset_type LIKE ?"
         params = [f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"]
 
     elif mode == "type":
-        valid_types = ["Stock", "ETF", "Bond", "Crypto", "Other"]
-        asset_type = input(f"Enter asset type ({', '.join(valid_types)}): ").strip().title()
-        if not asset_type:
-            print("Error: Asset type cannot be empty.")
+        asset_type = (kwargs.get("asset_type") or "").strip().title()
+        if asset_type not in VALID_TYPES:
             conn.close()
-            return
-        if asset_type not in valid_types:
-            print(f"Error: '{asset_type}' is not a recognized type. Valid options: {', '.join(valid_types)}")
-            conn.close()
-            return
+            return False, f"'{asset_type}' is not a recognized type. Valid options: {', '.join(VALID_TYPES)}"
         query += " WHERE asset_type = ?"
         params = [asset_type]
 
     elif mode == "date":
-        import datetime
-        start_date = input("Enter start date (YYYY-MM-DD): ").strip()
-        end_date = input("Enter end date (YYYY-MM-DD): ").strip()
-
+        start_date = (kwargs.get("start_date") or "").strip()
+        end_date = (kwargs.get("end_date") or "").strip()
         try:
             start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
             end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d")
             if start_dt > end_dt:
-                print("Error: Start date cannot be after end date.")
                 conn.close()
-                return
+                return False, "Start date cannot be after end date."
         except ValueError:
-            print("Error: Dates must be in YYYY-MM-DD format.")
             conn.close()
-            return
-
+            return False, "Dates must be in YYYY-MM-DD format."
         query += " WHERE purchase_date BETWEEN ? AND ?"
         params = [start_date, end_date]
 
     elif mode == "range":
-        print("\nSelect a date range:")
-        print("1: This Month")
-        print("2: Last Month")
-        print("3: Last 3 Months")
-        print("4: This Year")
-        print("5: All Time")
-
-        choice = input("Enter choice: ").strip()
-        ranges = {
-            "1": "this_month",
-            "2": "last_month",
-            "3": "last_3_months",
-            "4": "this_year",
-            "5": "all_time"
-        }
-
-        if choice not in ranges:
-            print("Invalid choice.")
+        range_option = kwargs.get("range_option")
+        start_date, end_date = get_date_range(range_option)
+        if start_date is None:
             conn.close()
-            return
-
-        start_date, end_date = get_date_range(ranges[choice])
+            return False, "Invalid range option."
         query += " WHERE purchase_date BETWEEN ? AND ?"
         params = [start_date, end_date]
 
@@ -203,358 +183,115 @@ def filter_investments(mode="all"):
 
     elif mode == "sort_value":
         query = """
-            SELECT id, name, ticker, asset_type, quantity, purchase_price, purchase_date, created_at,
-                   (quantity * purchase_price) AS total_value
-            FROM investments
-            ORDER BY total_value DESC
-        """
+                SELECT id, name, ticker, asset_type, category_id, quantity, purchase_price, purchase_date, created_at,
+                       (quantity * purchase_price) AS total_value
+                FROM investments
+                ORDER BY total_value DESC \
+                """
 
     elif mode == "all":
         order_clause = " ORDER BY purchase_date DESC"
 
-    elif mode == "range":
-        print("\nSelect a date range:")
-        print("1: This Month")
-        print("2: Last Month")
-        print("3: Last 3 Months")
-        print("4: This Year")
-        print("5: All Time")
-
-        choice = input("Enter choice: ").strip()
-        ranges = {
-            "1": "this_month",
-            "2": "last_month",
-            "3": "last_3_months",
-            "4": "this_year",
-            "5": "all_time"
-        }
-
-        if choice not in ranges:
-            print("Invalid choice.")
-            conn.close()
-            return
-
-        start_date, end_date = get_date_range(ranges[choice])
-        query += " WHERE t.date BETWEEN ? AND ?"
-        params = [start_date, end_date]
-
-    # Execute query
-    c.execute(query + order_clause, params)
-    rows = c.fetchall()
-
-    if not rows:
-        print("No matching investments found.")
     else:
-        print("\n==== Investments ====\n")
-        print(f"{'ID':<5} {'Name':<20} {'Ticker':<10} {'Type':<12} {'Qty':>8} {'Price':>12} {'Date':<12} {'Created At':<12}")
-        print("-" * 95)
-        for row in rows:
-            iid = row[0]
-            name = row[1]
-            ticker = row[2]
-            asset_type = row[3]
-            qty = row[4]
-            price = f"${row[5]:,.2f}"
-            purchase_date = row[6]
-            created_at = row[7][:10]
-            print(f"{iid:<5} {name:<20} {ticker:<10} {asset_type:<12} {qty:>8} {price:>12} {purchase_date:<12} {created_at:<12}")
-
-    conn.close()
-
-
-def view_investments():
-    conn = sqlite3.connect('database/finance.db')
-    c = conn.cursor()
-    c.execute("""
-        SELECT id, name, ticker, asset_type, quantity, purchase_price, purchase_date, created_at
-        FROM investments
-        ORDER BY purchase_date DESC
-    """)
-    rows = c.fetchall()
-
-    if not rows:
-        print("No investments found.")
-    else:
-        print("\n==== Investments Overview ====\n")
-        # Print headers
-        print(f"{'ID':<5} {'Name':<20} {'Ticker':<10} {'Type':<12} {'Qty':>8} {'Price':>12} {'Date':<12} {'Created At':<12}")
-        print("-" * 95)
-        # Print each investment row
-        for row in rows:
-            iid = row[0]
-            name = row[1]
-            ticker = row[2]
-            asset_type = row[3]
-            qty = row[4]
-            price = f"${row[5]:,.2f}"
-            purchase_date = row[6]
-            created_at = row[7][:10]  # slice to YYYY-MM-DD
-            print(f"{iid:<5} {name:<20} {ticker:<10} {asset_type:<12} {qty:>8} {price:>12} {purchase_date:<12} {created_at:<12}")
-
-    conn.close()
-
-
-def delete_investment():
-    conn = sqlite3.connect('database/finance.db')
-    c = conn.cursor()
-
-    c.execute("SELECT COUNT(*) FROM investments")
-    if c.fetchone()[0] == 0:
-        print("There are no investments.")
         conn.close()
-        return
+        return False, f"Unknown filter mode: {mode}"
 
-    while True:
+    c.execute(query + order_clause, params)
+    rows = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return True, rows
+
+
+def update_investment_field(investment_id, field, value):
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute("SELECT id FROM investments WHERE id = ?", (investment_id,))
+    if c.fetchone() is None:
+        conn.close()
+        return False, "Investment does not exist."
+
+    if field == "name":
+        new_name = (value or "").strip()
+        if not new_name:
+            conn.close()
+            return False, "Name cannot be empty."
+        c.execute("UPDATE investments SET name = ? WHERE id = ?", (new_name, investment_id))
+
+    elif field == "ticker":
+        new_ticker = (value or "").strip().upper()
+        if not new_ticker:
+            conn.close()
+            return False, "Ticker cannot be empty."
+        c.execute("UPDATE investments SET ticker = ? WHERE id = ?", (new_ticker, investment_id))
+
+    elif field == "asset_type":
+        new_type = (value or "").strip().title()
+        if new_type not in VALID_TYPES:
+            conn.close()
+            return False, f"Invalid asset type. Must be one of: {', '.join(VALID_TYPES)}"
+        c.execute("UPDATE investments SET asset_type = ? WHERE id = ?", (new_type, investment_id))
+
+    elif field == "category_id":
         try:
-            inv_id = int(input("Enter the ID of the investment to delete: "))
-            c.execute("SELECT id FROM investments WHERE id = ?", (inv_id,))
-            if c.fetchone() is None:
-                print("Invalid ID. Investment does not exist.")
-                continue
-            break
+            category_id = int(value)
+            if category_id <= 0 or not category_exists(category_id):
+                conn.close()
+                return False, "Category does not exist."
+        except (TypeError, ValueError):
+            conn.close()
+            return False, "Category ID must be a valid integer."
+        c.execute("UPDATE investments SET category_id = ? WHERE id = ?", (category_id, investment_id))
+
+    elif field == "quantity":
+        try:
+            new_quantity = float(value)
+            if new_quantity <= 0:
+                conn.close()
+                return False, "Quantity must be greater than 0."
+        except (TypeError, ValueError):
+            conn.close()
+            return False, "Quantity must be a valid number."
+        c.execute("UPDATE investments SET quantity = ? WHERE id = ?", (new_quantity, investment_id))
+
+    elif field == "purchase_price":
+        try:
+            new_price = float(value)
+            if new_price <= 0:
+                conn.close()
+                return False, "Purchase price must be greater than 0."
+        except (TypeError, ValueError):
+            conn.close()
+            return False, "Purchase price must be a valid number."
+        c.execute("UPDATE investments SET purchase_price = ? WHERE id = ?", (new_price, investment_id))
+
+    elif field == "purchase_date":
+        new_date = (value or "").strip()
+        try:
+            datetime.datetime.strptime(new_date, "%Y-%m-%d")
         except ValueError:
-            print("Invalid input. Please enter a number.")
+            conn.close()
+            return False, "Purchase date must be in YYYY-MM-DD format."
+        c.execute("UPDATE investments SET purchase_date = ? WHERE id = ?", (new_date, investment_id))
 
-    c.execute("SELECT id, name, ticker, asset_type, quantity, purchase_price, purchase_date FROM investments WHERE id = ?", (inv_id,))
-    inv = c.fetchone()
-    if inv:
-        print("\n==== Investment To Delete ====\n")
-        print(f"{'ID':<5} {'Name':<20} {'Ticker':<10} {'Type':<10} {'Quantity':<10} {'Price':<10} {'Date':<12}")
-        print("-" * 80)
-        print(f"{inv[0]:<5} {inv[1]:<20} {inv[2]:<10} {inv[3]:<10} {inv[4]:<10.2f} {inv[5]:<10.2f} {inv[6]:<12}")
-
-    confirm = input("Are you sure you want to delete this investment? (y/n): ").lower()
-    if confirm == "y":
-        c.execute("DELETE FROM investments WHERE id = ?", (inv_id,))
-        conn.commit()
-        print("\nInvestment deleted.")
     else:
-        print("\nDeletion cancelled.")
+        conn.close()
+        return False, f"Unknown field: {field}"
 
+    conn.commit()
     conn.close()
+    return True, None
 
 
-def update_investment():
-    conn = sqlite3.connect('database/finance.db')
+def delete_investment(investment_id):
+    """Returns (success: bool, error: str|None)."""
+    conn = get_connection()
     c = conn.cursor()
-
-    while True:
-        try:
-            inv_id = int(input("Enter the ID of the investment to update: "))
-            c.execute("SELECT id FROM investments WHERE id = ?", (inv_id,))
-            if c.fetchone() is None:
-                print("Invalid ID. Investment does not exist.")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter a number.")
-
-    while True:
-        try:
-            choice = int(input("Which field do you want to edit?\n1: Name\n2: Ticker\n3: Asset Type\n4: Quantity\n5: Purchase Price\n6: Purchase Date\n"))
-            if choice == 1:
-                old_name = c.execute("SELECT name FROM investments WHERE id = ?", (inv_id,)).fetchone()[0]
-                print("\nOld name:", old_name)
-                new_name = input("Enter new name: ").strip()
-                c.execute("UPDATE investments SET name = ? WHERE id = ?", (new_name, inv_id))
-            elif choice == 2:
-                old_ticker = c.execute("SELECT ticker FROM investments WHERE id = ?", (inv_id,)).fetchone()[0]
-                print("\nOld ticker:", old_ticker)
-                new_ticker = input("Enter new ticker: ").strip().upper()
-                c.execute("UPDATE investments SET ticker = ? WHERE id = ?", (new_ticker, inv_id))
-            elif choice == 3:
-                valid_types = ["Stock", "ETF", "Bond", "Crypto", "Other"]
-                old_type = c.execute("SELECT asset_type FROM investments WHERE id = ?", (inv_id,)).fetchone()[0]
-                print("\nOld asset type:", old_type)
-                while True:
-                    new_type = input(f"Enter new asset type ({', '.join(valid_types)}): ").strip().title()
-                    if new_type not in valid_types:
-                        print(f"Invalid asset type. Please choose from: {', '.join(valid_types)}")
-                    else:
-                        break
-                c.execute("UPDATE investments SET asset_type = ? WHERE id = ?", (new_type, inv_id))
-            elif choice == 4:
-                old_cat = c.execute("SELECT category_id FROM investments WHERE id = ?", (inv_id,)).fetchone()[0]
-                print("\nOld category id:", old_cat)
-                while True:
-                    try:
-                        category_id = int(input("Enter new category ID: "))
-                        if category_id > 0:
-                            if category_exists(category_id):
-                                break
-                            else:
-                                print("Category does not exist.")
-                        else:
-                            print("Category ID must be a positive integer.")
-                    except ValueError:
-                        print("Please enter a valid category ID.")
-                c.execute("UPDATE investments SET category_id = ? WHERE id = ?", (category_id, inv_id))
-            elif choice == 5:
-                old_price = c.execute("SELECT purchase_price FROM investments WHERE id = ?", (inv_id,)).fetchone()[0]
-                print("\nOld purchase price:", old_price)
-                while True:
-                    try:
-                        new_price = float(input("Enter new purchase price: "))
-                        if new_price <= 0:
-                            print("Price must be greater than 0.")
-                            continue
-                        break
-                    except ValueError:
-                        print("Invalid input. Please enter a number.")
-                c.execute("UPDATE investments SET purchase_price = ? WHERE id = ?", (new_price, inv_id))
-            elif choice == 6:
-                old_date = c.execute("SELECT purchase_date FROM investments WHERE id = ?", (inv_id,)).fetchone()[0]
-                print("\nOld purchase date:", old_date)
-                while True:
-                    new_date = input("Enter new purchase date (YYYY-MM-DD): ").strip()
-                    try:
-                        datetime.datetime.strptime(new_date, "%Y-%m-%d")
-                        break
-                    except ValueError:
-                        print("Invalid date format. Please use YYYY-MM-DD.")
-                c.execute("UPDATE investments SET purchase_date = ? WHERE id = ?", (new_date, inv_id))
-            else:
-                print("Please enter a number between 1 and 6.")
-                continue
-
-            conn.commit()
-            print("\nInvestment updated.")
-            break
-        except ValueError:
-            print("Invalid input. Please enter a number between 1 and 6.")
-
+    c.execute("SELECT id FROM investments WHERE id = ?", (investment_id,))
+    if c.fetchone() is None:
+        conn.close()
+        return False, "Investment does not exist."
+    c.execute("DELETE FROM investments WHERE id = ?", (investment_id,))
+    conn.commit()
     conn.close()
-
-
-def search_investment():
-    conn = sqlite3.connect('database/finance.db')
-    c = conn.cursor()
-
-    # Ask for ID and validate
-    while True:
-        try:
-            investment_id = int(input("What is the ID of the investment you want to search: "))
-            # Check if investment exists
-            c.execute("SELECT id FROM investments WHERE id = ?", (investment_id,))
-            result = c.fetchone()
-            if result is None:
-                print("Invalid ID. Investment does not exist.\n")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter a valid number.")
-
-    # Fetch investment details
-    c.execute("""
-        SELECT id, name, ticker, asset_type, quantity, purchase_price, purchase_date, created_at
-        FROM investments
-        WHERE id = ?
-    """, (investment_id,))
-
-    investment = c.fetchone()
-    if investment:
-        print("\n==== Investment Details ====\n")
-        # Print headers
-        print(f"{'ID':<5} {'Name':<20} {'Ticker':<10} {'Type':<12} {'Qty':>8} {'Price':>12} {'Date':<12} {'Created At':<12}")
-        print("-" * 95)
-        # Print row
-        iid = investment[0]
-        name = investment[1]
-        ticker = investment[2]
-        asset_type = investment[3]
-        qty = investment[4]
-        price = f"${investment[5]:,.2f}"
-        purchase_date = investment[6]
-        created_at = investment[7][:10]  # slice to YYYY-MM-DD
-        print(f"{iid:<5} {name:<20} {ticker:<10} {asset_type:<12} {qty:>8} {price:>12} {purchase_date:<12} {created_at:<12}")
-
-    conn.close()
-
-
-def financial_actions():
-    conn = sqlite3.connect("database/finance.db")
-    c = conn.cursor()
-    while True:
-        c.execute("SELECT COUNT(*) FROM investments")
-        count = c.fetchone()[0]
-        if count == 0:
-            print("There are no investments.")
-            break
-        try:
-            choice = int(input("Would you like to:\n"
-                               "1: Update investment\n"
-                               "2: Search investment\n"
-                               "3: Delete investment\n"))
-            if choice == 1:
-                update_investment()
-            elif choice == 2:
-                search_investment()
-            elif choice == 3:
-                delete_investment()
-            else:
-                print("Invalid input. Please enter 1, 2, or 3.")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter 1, 2, or 3.")
-    conn.close()
-
-
-def menu():
-    while True:
-        print("\n==== Investments Menu ====")
-        print("1: Add Investment")
-        print("2: View/Filter Investments")
-        print("3: Search Investment by ID")
-        print("4: Financial Actions (update/delete)")
-        print("0: Back to Dashboard")
-
-        try:
-            choice = int(input("Select an option: "))
-            if choice == 1:
-                add_investment()
-            elif choice == 2:
-                # Submenu for viewing/filtering
-                while True:
-                    print("\n==== View/Filter Investments ====")
-                    print("1: View all investments")
-                    print("2: Search by keyword (name/ticker/type)")
-                    print("3: Filter by type")
-                    print("4: Filter by purchase date range")
-                    print("5: Sort by purchase date")
-                    print("6: Sort by total value")
-                    print("7: Quick date range selector")
-                    print("0: Back")
-
-                    sub_choice = input("Select an option: ").strip()
-
-                    if sub_choice == "1":
-                        view_investments()
-                    elif sub_choice == "2":
-                        filter_investments("keyword")
-                    elif sub_choice == "3":
-                        filter_investments("type")
-                    elif sub_choice == "4":
-                        filter_investments("date")
-                    elif sub_choice == "5":
-                        filter_investments("sort_date")
-                    elif sub_choice == "6":
-                        filter_investments("sort_value")
-                    elif sub_choice == "7":
-                        filter_investments("range")  # <-- new mode
-                    elif sub_choice == "0":
-                        break
-                    else:
-                        print("Invalid choice. Please enter 0–7.")
-
-
-            elif choice == 3:
-                search_investment()  # ID-based search
-            elif choice == 4:
-                financial_actions()  # update/delete
-            elif choice == 0:
-                break
-            else:
-                print("Invalid choice. Please enter 0–4.")
-        except ValueError:
-            print("Invalid input. Please enter a number.")
+    return True, None

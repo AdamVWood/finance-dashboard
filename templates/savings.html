@@ -2,9 +2,86 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>Savings Goals</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/forms.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tables.css') }}">
 </head>
 <body>
+<a href="{{ url_for('dashboard') }}">&larr; Dashboard</a>
+<h1>Savings Goals</h1>
 
+{% if error %}
+<div class="error-box">
+    <ul>
+        {% for e in error %}
+        <li>{{ e }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<section class="filters">
+    <form method="get" action="{{ url_for('savings_page') }}">
+        <select name="mode" onchange="this.form.submit()">
+            <option value="all" {% if mode == "all" %}selected{% endif %}>All</option>
+            <option value="sort_deadline" {% if mode == "sort_deadline" %}selected{% endif %}>Sort by Deadline</option>
+            <option value="sort_target" {% if mode == "sort_target" %}selected{% endif %}>Sort by Target</option>
+            <option value="sort_current" {% if mode == "sort_current" %}selected{% endif %}>Sort by Current Amount</option>
+            <option value="keyword" {% if mode == "keyword" %}selected{% endif %}>Search Keyword</option>
+            <option value="range" {% if mode == "range" %}selected{% endif %}>Quick Deadline Range</option>
+        </select>
+
+        <input type="text" name="keyword" placeholder="Keyword (name)">
+
+        <select name="range_option">
+            <option value="">-- Quick Range --</option>
+            <option value="this_month">This Month</option>
+            <option value="last_month">Last Month</option>
+            <option value="last_3_months">Last 3 Months</option>
+            <option value="this_year">This Year</option>
+            <option value="all_time">All Time</option>
+        </select>
+
+        <button type="submit">Apply</button>
+    </form>
+</section>
+
+<div class="goal-cards">
+    {% for g in goals %}
+    <div class="goal-card">
+        <h3>{{ g.name }} (ID: {{ g.id }})</h3>
+        <p>${{ "%.2f"|format(g.current_amount) }} / ${{ "%.2f"|format(g.target_amount) }} &mdash; {{ "%.0f"|format(g.progress) }}%</p>
+        <progress value="{{ g.progress }}" max="100"></progress>
+        <p>Remaining: ${{ "%.2f"|format(g.remaining) }}</p>
+        <p>Deadline: {{ g.deadline }}</p>
+        <p>Required Monthly Contribution: ${{ "%.2f"|format(g.required_monthly) }}</p>
+        <p>Status: {{ g.status }}</p>
+
+        <form method="post" action="{{ url_for('add_money_route', goal_id=g.id) }}" style="display:inline">
+            <input type="number" step="any" name="amount" placeholder="Amount" required style="width:100px">
+            <button type="submit">Add Money</button>
+        </form>
+
+        <form method="post" action="{{ url_for('delete_savings_goal_route', goal_id=g.id) }}"
+              onsubmit="return confirm('Delete this savings goal?');" style="display:inline">
+            <button type="submit">Delete</button>
+        </form>
+    </div>
+    {% else %}
+    <p>No matching savings goals found.</p>
+    {% endfor %}
+</div>
+
+<h2>Add Savings Goal</h2>
+<form method="post" action="{{ url_for('add_savings_goal_route') }}" class="add-form">
+    <input type="text" name="name" placeholder="Name" required>
+    <input type="number" name="category_id" placeholder="Category ID" required>
+    <input type="number" step="any" name="target_amount" placeholder="Target Amount" required>
+    <input type="number" step="any" name="current_amount" placeholder="Current Amount" value="0">
+    <input type="date" name="deadline" required>
+    <button type="submit">Add Savings Goal</button>
+</form>
 </body>
 </html>

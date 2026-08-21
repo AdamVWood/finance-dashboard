@@ -1,162 +1,10 @@
-import sqlite3
 import datetime
 from app.categories import category_exists
-
-
-def budget_dashboard():
-    conn = sqlite3.connect('database/finance.db')
-    c = conn.cursor()
-
-    # Get all budgets with category names
-    c.execute("""
-        SELECT b.id, b.category_id, c.name, b.amount, b.month, b.year
-        FROM budgets b
-        INNER JOIN categories c ON b.category_id = c.id
-    """)
-    budgets = c.fetchall()
-
-    total_budget = 0.0
-    total_spent = 0.0
-    over_budget = []
-    near_limit = []
-
-    for bid, cat_id, cat_name, amount, month, year in budgets:
-        amount = float(amount or 0)
-        total_budget += amount
-
-        # Sum transactions for this category/month/year
-        c.execute("""
-            SELECT SUM(amount) FROM transactions
-            WHERE category_id = ? AND transaction_type = 'Expense'
-              AND strftime('%m', date) = ? AND strftime('%Y', date) = ?
-        """, (cat_id, f"{month:02d}", str(year)))
-        spent = c.fetchone()[0]
-        spent = float(spent or 0)
-        total_spent += spent
-
-        progress = (spent / amount * 100) if amount > 0 else 0
-        if progress > 100:
-            over_budget.append(cat_name)
-            state = "Over budget"
-        elif progress >= 80:
-            near_limit.append(cat_name)
-            state = "Near limit"
-        else:
-            state = "Under budget"
-
-        # Print per‑category progress bar
-        bar_length = 20
-        filled = int(bar_length * progress / 100)
-        bar = "█" * filled + "░" * (bar_length - filled)
-
-        print(f"\n{cat_name}")
-        print(f"${spent:.2f} / ${amount:.2f}")
-        print(f"{bar} {progress:.0f}%")
-        print(f"Status: {state}")
-
-    remaining = total_budget - total_spent
-    percent_used = (total_spent / total_budget) * 100 if total_budget > 0 else 0
-
-    print("\n==== Budget Dashboard ====")
-    print(f"Total Budget: ${total_budget:.2f}")
-    print(f"Total Spent: ${total_spent:.2f}")
-    print(f"Remaining: ${remaining:.2f}")
-    print(f"Percentage Used: {percent_used:.0f}%")
-    print(f"Categories Over Budget: {', '.join(over_budget) if over_budget else 'None'}")
-    print(f"Categories Near Limit: {', '.join(near_limit) if near_limit else 'None'}")
-
-    conn.close()
-
-
-def budget_summary():
-    conn = sqlite3.connect('database/finance.db')
-    c = conn.cursor()
-    c.execute("SELECT SUM(amount) FROM budgets")
-    total_budget = float(c.fetchone()[0] or 0)
-
-    c.execute("SELECT SUM(amount) FROM transactions WHERE transaction_type = 'Expense'")
-    total_spent = float(c.fetchone()[0] or 0)
-
-    remaining = total_budget - total_spent
-    percent_used = (total_spent / total_budget * 100) if total_budget > 0 else 0
-
-    print("\n==== Quick Budget Summary ====")
-    print(f"Total Budget: ${total_budget:.2f}")
-    print(f"Total Spent: ${total_spent:.2f}")
-    print(f"Remaining: ${remaining:.2f}")
-    print(f"Percentage Used: {percent_used:.0f}%")
-
-    conn.close()
-
-
-def add_budget():
-    conn = sqlite3.connect('database/finance.db')
-    c = conn.cursor()
-    # Amount: must be a positive number
-    while True:
-        try:
-            amount = float(input("Please enter your amount: "))
-            if amount <= 0:
-                print("Amount must be greater than 0.")
-                continue
-            break
-        except ValueError:
-            print("Invalid amount. Please enter a number.")
-
-    # Category: cannot be empty
-    while True:
-        try:
-            category = int(input("Please enter the category ID: "))
-            if category > 0:
-                # Check if category exists first
-                c.execute("SELECT id FROM categories WHERE id = ?", (category,))
-                if c.fetchone():
-                    break  # valid category, exit loop
-                else:
-                    print("Category does not exist.")
-            else:
-                print("Category ID must be a positive integer.")
-        except ValueError:
-            print("Please enter a valid category ID.")
-
-    # Month: 1-12
-    while True:
-        try:
-            month = int(input("Please enter the month (1-12): "))
-            if 1 <= month <= 12:
-                break
-            else:
-                print("Month must be between 1 and 12.")
-        except ValueError:
-            print("Invalid input. Please enter a valid month.")
-
-    #Year: four digits
-    while True:
-        try:
-            year = int(input("Please enter the year (YYYY): "))
-            if 1990 <= year <= 2100:
-                break
-            else:
-                print("Year must be a valid four-digit year.")
-        except ValueError:
-            print("Invalid input. Please enter a valid year.")
-
-    created_at = datetime.datetime.today().strftime("%Y-%m-%d")
-    c.execute("SELECT id FROM budgets WHERE category_id = ? AND month = ? AND year = ?", (category, month, year))
-    if c.fetchone():
-        print("A budget for this category and period already exists.")
-        conn.close()
-        return
-
-    c.execute('''
-        INSERT INTO budgets (category_id, amount, month, year, created_at)
-        VALUES (?, ?, ?, ?)
-        ''', (category, amount, month, year, created_at))  # enters the data
-    conn.commit()
-    conn.close()
+from database.database import get_connection
 
 
 def get_date_range(option):
+    """Returns (start_date_str, end_date_str) for a named range option, or (None, None) if invalid."""
     today = datetime.date.today()
     if option == "this_month":
         start = today.replace(day=1)
@@ -185,91 +33,161 @@ def get_date_range(option):
     return start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
 
 
-def filter_budgets(mode="all"):
-    conn = sqlite3.connect('database/finance.db')
+def add_budget(data):
+    errors = []
+
+    amount = None
+    try:
+        amount = float(data.get("amount"))
+        if amount <= 0:
+            errors.append("Amount must be greater than 0.")
+    except (TypeError, ValueError):
+        errors.append("Amount must be a valid number.")
+
+    category_id = None
+    try:
+        category_id = int(data.get("category_id"))
+        if category_id <= 0:
+            errors.append("Category ID must be a positive integer.")
+        elif not category_exists(category_id):
+            errors.append("Category does not exist.")
+    except (TypeError, ValueError):
+        errors.append("Category ID must be a valid integer.")
+
+    month = None
+    try:
+        month = int(data.get("month"))
+        if not (1 <= month <= 12):
+            errors.append("Month must be between 1 and 12.")
+    except (TypeError, ValueError):
+        errors.append("Month must be a valid number.")
+
+    year = None
+    try:
+        year = int(data.get("year"))
+        if not (1990 <= year <= 2100):
+            errors.append("Year must be a valid four-digit year.")
+    except (TypeError, ValueError):
+        errors.append("Year must be a valid number.")
+
+    if errors:
+        return False, errors
+
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute(
+        "SELECT id FROM budgets WHERE category_id = ? AND month = ? AND year = ?",
+        (category_id, month, year),
+    )
+    if c.fetchone():
+        conn.close()
+        return False, ["A budget for this category and period already exists."]
+
+    created_at = datetime.datetime.today().strftime("%Y-%m-%d")
+    c.execute(
+        """INSERT INTO budgets (category_id, amount, month, year, created_at)
+           VALUES (?, ?, ?, ?, ?)""",
+        (category_id, amount, month, year, created_at),
+    )
+    conn.commit()
+    new_id = c.lastrowid
+    conn.close()
+    return True, {"id": new_id}
+
+
+def get_all_budgets():
+    """Returns a list of dicts, one per budget, sorted by year/month desc."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+              SELECT b.id, b.category_id, c.name AS category_name, b.amount, b.month, b.year, b.created_at
+              FROM budgets b
+                       INNER JOIN categories c ON b.category_id = c.id
+              ORDER BY b.year DESC, b.month DESC
+              """)
+    rows = [dict(r) for r in c.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_budget(budget_id):
+    """Returns a single budget dict, or None if it doesn't exist."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("""
+              SELECT b.id, b.category_id, c.name AS category_name, b.amount, b.month, b.year, b.created_at
+              FROM budgets b
+                       INNER JOIN categories c ON b.category_id = c.id
+              WHERE b.id = ?
+              """, (budget_id,))
+    row = c.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def filter_budgets(mode="all", **kwargs):
+    conn = get_connection()
     c = conn.cursor()
 
     query = """
-        SELECT b.id, b.amount, c.name, b.month, b.year, b.created_at
-        FROM budgets b
-        INNER JOIN categories c ON b.category_id = c.id
-    """
+            SELECT b.id, b.category_id, c.name AS category_name, b.amount, b.month, b.year, b.created_at
+            FROM budgets b
+                     INNER JOIN categories c ON b.category_id = c.id \
+            """
     params = []
     order_clause = ""
 
     if mode == "keyword":
-        keyword = input("Enter keyword (category/month/year): ").strip()
+        keyword = (kwargs.get("keyword") or "").strip()
         if not keyword:
-            print("Error: Keyword cannot be empty.")
             conn.close()
-            return
+            return False, "Keyword cannot be empty."
         query += " WHERE c.name LIKE ? OR b.month LIKE ? OR b.year LIKE ?"
         params = [f"%{keyword}%", f"%{keyword}%", f"%{keyword}%"]
 
     elif mode == "category":
-        category = input("Enter category name: ").strip()
+        category = (kwargs.get("category") or "").strip()
         if not category:
-            print("Error: Category cannot be empty.")
             conn.close()
-            return
+            return False, "Category cannot be empty."
         query += " WHERE c.name = ?"
         params = [category]
 
     elif mode == "range":
-        print("\nSelect a date range:")
-        print("1: This Month")
-        print("2: Last Month")
-        print("3: Last 3 Months")
-        print("4: This Year")
-        print("5: All Time")
-
-        choice = input("Enter choice: ").strip()
-        ranges = {
-            "1": "this_month",
-            "2": "last_month",
-            "3": "last_3_months",
-            "4": "this_year",
-            "5": "all_time"
-        }
-
-        if choice not in ranges:
-            print("Invalid choice.")
+        range_option = kwargs.get("range_option")
+        start_date, end_date = get_date_range(range_option)
+        if start_date is None:
             conn.close()
-            return
-
-        start_date, end_date = get_date_range(ranges[choice])
+            return False, "Invalid range option."
         query += " WHERE b.created_at BETWEEN ? AND ?"
         params = [start_date, end_date]
 
     elif mode == "month_year":
         try:
-            month = int(input("Enter month (1–12): ").strip())
-            year = int(input("Enter year (YYYY): ").strip())
-            if month < 1 or month > 12:
-                print("Error: Month must be between 1 and 12.")
+            month = int(kwargs.get("month"))
+            year = int(kwargs.get("year"))
+            if not (1 <= month <= 12):
                 conn.close()
-                return
-        except ValueError:
-            print("Error: Month and year must be numbers.")
+                return False, "Month must be between 1 and 12."
+        except (TypeError, ValueError):
             conn.close()
-            return
+            return False, "Month and year must be numbers."
         query += " WHERE b.month = ? AND b.year = ?"
         params = [month, year]
 
     elif mode == "date":
-        start_date = input("Enter start date (YYYY-MM-DD): ").strip()
-        end_date = input("Enter end date (YYYY-MM-DD): ").strip()
+        start_date = (kwargs.get("start_date") or "").strip()
+        end_date = (kwargs.get("end_date") or "").strip()
         try:
             start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
             end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d")
             if start_dt > end_dt:
-                print("Error: Start date cannot be after end date.")
                 conn.close()
-                return
+                return False, "Start date cannot be after end date."
         except ValueError:
-            print("Error: Dates must be in YYYY-MM-DD format.")
             conn.close()
-            return
+            return False, "Dates must be in YYYY-MM-DD format."
         query += " WHERE b.created_at BETWEEN ? AND ?"
         params = [start_date, end_date]
 
@@ -282,331 +200,167 @@ def filter_budgets(mode="all"):
     elif mode == "all":
         order_clause = " ORDER BY b.year DESC, b.month DESC"
 
-    # Execute query
-    c.execute(query + order_clause, params)
-    rows = c.fetchall()
-
-    if not rows:
-        print("No matching budgets found.")
     else:
-        print("\n==== Budgets ====\n")
-        print(f"{'ID':<5} {'Amount':>12} {'Category':<15} {'Month':<8} {'Year':<6} {'Created At':<12}")
-        print("-" * 70)
-        for row in rows:
-            bid = row[0]
-            amount = f"${row[1]:,.2f}"
-            category = row[2]
-            month = row[3]
-            year = row[4]
-            created_at = row[5][:10]
-            print(f"{bid:<5} {amount:>12} {category:<15} {month:<8} {year:<6} {created_at:<12}")
-
-    conn.close()
-
-
-def view_budgets():
-    conn = sqlite3.connect('database/finance.db')
-    c = conn.cursor()
-    c.execute("""
-        SELECT b.id, c.name, b.amount, b.month, b.year, b.created_at
-        FROM budgets b
-        INNER JOIN categories c ON b.category_id = c.id
-    """)
-    rows = c.fetchall()
-
-    if not rows:
-        print("No budgets found.")
-    else:
-        print("\n==== Budgets Overview ====\n")
-        # Print headers
-        print(f"{'ID':<5} {'Amount':>12} {'Category':<15} {'Month':<8} {'Year':<6} {'Created At':<12}")
-        print("-" * 70)
-        # Print each budget row
-        for row in rows:
-            bid = row[0]
-            amount = f"${row[2]:,.2f}"
-            category = row[1]
-            month = row[3]
-            year = row[4]
-            created_at = row[5][:10]  # slice to YYYY-MM-DD
-            print(f"{bid:<5} {amount:>12} {category:<15} {month:<8} {year:<6} {created_at:<12}")
-
-    conn.close()
-
-
-def delete_budget():
-    conn = sqlite3.connect('database/finance.db')
-    c = conn.cursor()
-
-    # Check if there are any budgets
-    c.execute("SELECT COUNT(*) FROM budgets")
-    if c.fetchone()[0] == 0:
-        print("There are no budgets.")
         conn.close()
-        return
+        return False, f"Unknown filter mode: {mode}"
 
-    # Ask for ID and validate
-    while True:
-        try:
-            budget_id = int(input("Enter the ID of the budget you want to delete: "))
-            c.execute("SELECT id FROM budgets WHERE id = ?", (budget_id,))
-            result = c.fetchone()
-            if result is None:
-                print("Invalid ID. Budget does not exist.\n")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter a valid number.")
-
-    # Show budget details before deleting
-    c.execute("""
-        SELECT b.id, c.name, b.amount, b.month, b.year
-        FROM budgets b
-        INNER JOIN categories c ON b.category_id = c.id
-        WHERE b.id = ?
-    """, (budget_id,))
-    budget = c.fetchone()
-    if budget:
-        print("\n==== Budget To Delete ====\n")
-        print(f"{'ID':<5} {'Category':<15} {'Amount':<10} {'month':<2} {'year':<4}")
-        print("-" * 90)
-        print(f"{budget[0]:<5} {budget[1]:<15} {budget[2]:<10.2f} {budget[3]:<2} {budget[4]:<4}")
-
-    confirm = input("Are you sure you want to delete this budget? (y/n): ").lower()
-    if confirm == "y":
-        c.execute("DELETE FROM budgets WHERE id = ?", (budget_id,))
-        conn.commit()
-        print("\nBudget deleted.")
-    else:
-        print("\nDeletion cancelled.")
-
+    c.execute(query + order_clause, params)
+    rows = [dict(r) for r in c.fetchall()]
     conn.close()
+    return True, rows
 
 
-def update_budget():
-    conn = sqlite3.connect('database/finance.db')
+def update_budget_field(budget_id, field, value, value2=None):
+    conn = get_connection()
     c = conn.cursor()
-    while True:
+
+    c.execute("SELECT id FROM budgets WHERE id = ?", (budget_id,))
+    if c.fetchone() is None:
+        conn.close()
+        return False, "Budget does not exist."
+
+    if field == "category_id":
         try:
-            unique_id = int(input("Enter the ID of the budget you want to update: "))
-            c.execute("SELECT id FROM budgets WHERE id = ?", (unique_id,))
-            result = c.fetchone()
-            if result is None:
-                print("Invalid ID. Budget does not exist.\n")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter a valid number.")
-
-    while True:
-        try:
-            result = int(input("Which field do you want to edit?:\n"
-                               "1: Category ID\n"
-                               "2: Amount\n"
-                               "3: Date\n"))
-            if result == 1:
-                c.execute("SELECT category_id FROM budgets WHERE id = ?", (unique_id,))
-                print("\nOld category id:", c.fetchone()[0])
-                while True:
-                    try:
-                        category = int(input("Please enter your category ID: "))
-                        if category > 0:
-                            if category_exists(category):
-                                break
-                            else:
-                                print("Category does not exist.")
-                        else:
-                            print("Category ID must be a positive integer.")
-                    except ValueError:
-                        print("Please enter a valid category ID.")
-                c.execute("UPDATE budgets SET category_id = ? WHERE id = ?", (category, unique_id))
-
-            elif result == 2:
-                c.execute("SELECT amount FROM budgets WHERE id = ?", (unique_id,))
-                old_amount = c.fetchone()[0]
-                print("\nOld amount:", old_amount)
-                while True:
-                    try:
-                        new_amount = float(input("Enter the new amount: "))
-                        if new_amount <= 0:
-                            print("New amount must be greater than 0.")
-                            continue
-                        break
-                    except ValueError:
-                        print("Invalid amount. Please enter a number.")
-                c.execute("UPDATE budgets SET amount = ? WHERE id = ?", (new_amount, unique_id))
-
-            elif result == 3:
-                c.execute("SELECT month, year FROM budgets WHERE id = ?", (unique_id,))
-                old_month, old_year = c.fetchone()
-                print(f"\nOld period: Month {old_month}, Year {old_year}")
-                while True:
-                    try:
-                        month = int(input("Please enter the month (1-12): "))
-                        if 1 <= month <= 12:
-                            break
-                        else:
-                            print("Month must be between 1 and 12.")
-                    except ValueError:
-                        print("Invalid input. Please enter a valid month.")
-                while True:
-                    try:
-                        year = int(input("Please enter the year (YYYY): "))
-                        if 1990 <= year <= 2100:
-                            break
-                        else:
-                            print("Year must be a valid four-digit year.")
-                    except ValueError:
-                        print("Invalid input. Please enter a valid year.")
-                c.execute("UPDATE budgets SET month = ?, year = ? WHERE id = ?", (month, year, unique_id))
-
-            else:
-                print("Please enter a number between 1 and 3.")
-                continue
-
-            print("\nBudget updated.")
-            conn.commit()
+            category_id = int(value)
+            if category_id <= 0 or not category_exists(category_id):
+                conn.close()
+                return False, "Category does not exist."
+        except (TypeError, ValueError):
             conn.close()
-            break
-        except ValueError:
-            print("Invalid input. Please enter a number between 1 and 3.")
+            return False, "Category ID must be a valid integer."
+        c.execute("UPDATE budgets SET category_id = ? WHERE id = ?", (category_id, budget_id))
 
-
-def search_budget():
-    conn = sqlite3.connect('database/finance.db')
-    c = conn.cursor()
-
-    # Ask for ID and validate
-    while True:
+    elif field == "amount":
         try:
-            budget_id = int(input("What is the ID of the budget you want to search: "))
-            # Check if budget exists
-            c.execute("SELECT id FROM budgets WHERE id = ?", (budget_id,))
-            result = c.fetchone()
-            if result is None:
-                print("Invalid ID. Budget does not exist.\n")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter a valid number.")
+            new_amount = float(value)
+            if new_amount <= 0:
+                conn.close()
+                return False, "New amount must be greater than 0."
+        except (TypeError, ValueError):
+            conn.close()
+            return False, "Invalid amount. Please enter a number."
+        c.execute("UPDATE budgets SET amount = ? WHERE id = ?", (new_amount, budget_id))
 
-    # Fetch budget details with category name
+    elif field == "period":
+        try:
+            month = int(value)
+            year = int(value2)
+            if not (1 <= month <= 12):
+                conn.close()
+                return False, "Month must be between 1 and 12."
+            if not (1990 <= year <= 2100):
+                conn.close()
+                return False, "Year must be a valid four-digit year."
+        except (TypeError, ValueError):
+            conn.close()
+            return False, "Invalid month or year."
+        c.execute("UPDATE budgets SET month = ?, year = ? WHERE id = ?", (month, year, budget_id))
+
+    else:
+        conn.close()
+        return False, f"Unknown field: {field}"
+
+    conn.commit()
+    conn.close()
+    return True, None
+
+
+def delete_budget(budget_id):
+    """Returns (success: bool, error: str|None)."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT id FROM budgets WHERE id = ?", (budget_id,))
+    if c.fetchone() is None:
+        conn.close()
+        return False, "Budget does not exist."
+    c.execute("DELETE FROM budgets WHERE id = ?", (budget_id,))
+    conn.commit()
+    conn.close()
+    return True, None
+
+
+def budget_dashboard():
+    conn = get_connection()
+    c = conn.cursor()
     c.execute("""
-        SELECT b.id, b.amount, c.name, b.month, b.year, b.created_at
-        FROM budgets b
-        INNER JOIN categories c ON b.category_id = c.id
-        WHERE b.id = ?
-    """, (budget_id,))
+              SELECT b.id, b.category_id, c.name, b.amount, b.month, b.year
+              FROM budgets b
+                       INNER JOIN categories c ON b.category_id = c.id
+              """)
+    budgets = c.fetchall()
 
-    budget = c.fetchone()
-    if budget:
-        print("\n==== Budget Details ====\n")
-        # Print headers
-        print(f"{'ID':<5} {'Amount':>12} {'Category':<15} {'Month':<8} {'Year':<6} {'Created At':<12}")
-        print("-" * 70)
-        # Print row
-        bid = budget[0]
-        amount = f"${budget[1]:,.2f}"
-        category = budget[2]
-        month = budget[3]
-        year = budget[4]
-        created_at = budget[5][:10]  # slice to YYYY-MM-DD
-        print(f"{bid:<5} {amount:>12} {category:<15} {month:<8} {year:<6} {created_at:<12}")
+    total_budget = 0.0
+    total_spent = 0.0
+    over_budget = []
+    near_limit = []
+    categories = []
+
+    for bid, cat_id, cat_name, amount, month, year in budgets:
+        amount = float(amount or 0)
+        total_budget += amount
+
+        c.execute("""
+                  SELECT SUM(amount) FROM transactions
+                  WHERE category_id = ? AND transaction_type = 'Expense'
+                    AND strftime('%m', date) = ? AND strftime('%Y', date) = ?
+                  """, (cat_id, f"{month:02d}", str(year)))
+        spent = c.fetchone()[0]
+        spent = float(spent or 0)
+        total_spent += spent
+
+        progress = (spent / amount * 100) if amount > 0 else 0
+        if progress > 100:
+            over_budget.append(cat_name)
+            state = "Over budget"
+        elif progress >= 80:
+            near_limit.append(cat_name)
+            state = "Near limit"
+        else:
+            state = "Under budget"
+
+        categories.append({
+            "id": bid,
+            "category_name": cat_name,
+            "amount": amount,
+            "spent": spent,
+            "progress": progress,
+            "status": state,
+        })
+
+    remaining = total_budget - total_spent
+    percent_used = (total_spent / total_budget) * 100 if total_budget > 0 else 0
 
     conn.close()
 
+    return {
+        "categories": categories,
+        "total_budget": total_budget,
+        "total_spent": total_spent,
+        "remaining": remaining,
+        "percent_used": percent_used,
+        "over_budget": over_budget,
+        "near_limit": near_limit,
+    }
 
-def financial_actions():
-    conn = sqlite3.connect("database/finance.db")
+
+def budget_summary():
+    """Returns a dict: {total_budget, total_spent, remaining, percent_used}."""
+    conn = get_connection()
     c = conn.cursor()
-    while True:
-        c.execute("SELECT COUNT(*) FROM budgets")
-        count = c.fetchone()[0]
-        if count == 0:
-            print("There are no budgets.")
-            break
-        try:
-            choice = int(input("Would you like to:\n"
-                               "1: Update budget\n"
-                               "2: Search budget\n"
-                               "3: Delete budget\n"))
-            if choice == 1:
-                update_budget()
-            elif choice == 2:
-                search_budget()
-            elif choice == 3:
-                delete_budget()
-            else:
-                print("Invalid input. Please enter 1, 2, or 3.")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter 1, 2, or 3.")
+    c.execute("SELECT SUM(amount) FROM budgets")
+    total_budget = float(c.fetchone()[0] or 0)
+
+    c.execute("SELECT SUM(amount) FROM transactions WHERE transaction_type = 'Expense'")
+    total_spent = float(c.fetchone()[0] or 0)
+
+    remaining = total_budget - total_spent
+    percent_used = (total_spent / total_budget * 100) if total_budget > 0 else 0
+
     conn.close()
 
-
-def menu():
-    while True:
-        print("\n==== Budgets Menu ====")
-        print("1: Add Budget")
-        print("2: View/Filter Budgets")
-        print("3: Search Budget by ID")
-        print("4: Financial Actions (update/delete)")
-        print("5: Budget Dashboard")
-        print("6: Quick Summary")
-        print("0: Back to Dashboard")
-
-        try:
-            choice = int(input("Select an option: "))
-            if choice == 1:
-                add_budget()
-            elif choice == 2:
-                while True:
-                    print("\n==== View/Filter Budgets ====")
-                    print("1: View all budgets")
-                    print("2: Search by keyword")
-                    print("3: Filter by category")
-                    print("4: Filter by month/year")
-                    print("5: Filter by date range (manual)")
-                    print("6: Quick date range selector")  # new option
-                    print("7: Sort by created date")
-                    print("8: Sort by amount")
-                    print("0: Back")
-
-                    sub_choice = input("Select an option: ").strip()
-
-                    if sub_choice == "1":
-                        filter_budgets("all")
-                    elif sub_choice == "2":
-                        filter_budgets("keyword")
-                    elif sub_choice == "3":
-                        filter_budgets("category")
-                    elif sub_choice == "4":
-                        filter_budgets("month_year")
-                    elif sub_choice == "5":
-                        filter_budgets("date")
-                    elif sub_choice == "6":
-                        filter_budgets("range")  # new mode
-                    elif sub_choice == "7":
-                        filter_budgets("sort_date")
-                    elif sub_choice == "8":
-                        filter_budgets("sort_amount")
-                    elif sub_choice == "0":
-                        break
-                    else:
-                        print("Invalid choice. Please enter 0–8.")
-
-            elif choice == 3:
-                search_budget()
-            elif choice == 4:
-                financial_actions()
-            elif choice == 5:
-                budget_dashboard()
-            elif choice == 6:
-                budget_summary()
-            elif choice == 0:
-                break
-            else:
-                print("Invalid choice. Please enter 0–4.")
-        except ValueError:
-            print("Invalid input. Please enter a number.")
+    return {
+        "total_budget": total_budget,
+        "total_spent": total_spent,
+        "remaining": remaining,
+        "percent_used": percent_used,
+    }

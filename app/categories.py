@@ -1,7 +1,8 @@
-import sqlite3
+from database.database import get_connection
+
 
 def category_exists(category_id):
-    conn = sqlite3.connect('database/finance.db')
+    conn = get_connection()
     c = conn.cursor()
     c.execute("SELECT id FROM categories WHERE id = ?", (category_id,))
     result = c.fetchone()
@@ -9,227 +10,109 @@ def category_exists(category_id):
     return result is not None
 
 
-def search_category_by_id():
-    conn = sqlite3.connect('database/finance.db')
-    c = conn.cursor()
-
-    try:
-        category_id = int(input("Enter category ID: ").strip())
-    except ValueError:
-        print("Error: ID must be a number.")
-        conn.close()
-        return
-
-    c.execute("SELECT id, name FROM categories WHERE id = ?", (category_id,))
-    row = c.fetchone()
-
-    if not row:
-        print("No category found with that ID.")
-    else:
-        print("\n==== Category Details ====\n")
-        print(f"{'ID':<5} {'Name':<20}")
-        print("-" * 30)
-        print(f"{row[0]:<5} {row[1]:<20}")
-
-    conn.close()
-
-
-def add_category():
-    conn = sqlite3.connect('database/finance.db')
-    c = conn.cursor()
-    while True:
-        name = input("Enter category name: ").strip()
-        if name == "":
-            print("Category name cannot be empty.")
-            continue
-        # Check for duplicates
-        c.execute("SELECT id FROM categories WHERE LOWER(name) = LOWER(?)", (name,))
-        if c.fetchone():
-            print("Category with this name already exists.")
-            continue
-        break
-    c.execute("INSERT INTO categories (name) VALUES (?)", (name,))
-    conn.commit()
-    conn.close()
-    print("\nCategory added successfully.")
-
-
-def view_categories():
-    conn = sqlite3.connect('database/finance.db')
+def get_all_categories():
+    """Returns a list of dicts, one per category, sorted by name."""
+    conn = get_connection()
     c = conn.cursor()
     c.execute("SELECT id, name FROM categories ORDER BY name ASC")
-    rows = c.fetchall()
-
-    if not rows:
-        print("No categories found.")
-    else:
-        print("\n==== Categories ====\n")
-        print(f"{'ID':<5} {'Name':<20}")
-        print("-" * 30)
-        for row in rows:
-            print(f"{row[0]:<5} {row[1]:<20}")
-
+    rows = [dict(r) for r in c.fetchall()]
     conn.close()
+    return rows
 
 
-def delete_category():
-    conn = sqlite3.connect('database/finance.db')
+def get_category(category_id):
+    conn = get_connection()
     c = conn.cursor()
-
-    c.execute("SELECT COUNT(*) FROM categories")
-    if c.fetchone()[0] == 0:
-        print("There are no categories.")
-        conn.close()
-        return
-
-    while True:
-        try:
-            cat_id = int(input("Enter the ID of the category to delete: "))
-            c.execute("SELECT id FROM categories WHERE id = ?", (cat_id,))
-            if c.fetchone() is None:
-                print("Invalid ID. Category does not exist.")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter a number.")
-
-    cat = c.execute("SELECT id, name FROM categories WHERE id = ?", (cat_id,)).fetchone()
-    if cat:
-        print("\n==== Category To Delete ====\n")
-        print(f"{'ID':<5} {'Name':<20}")
-        print("-" * 30)
-        print(f"{cat[0]:<5} {cat[1]:<20}")
-
-    # Warn if linked to transactions/budgets/investments
-    c.execute("SELECT COUNT(*) FROM transactions WHERE category_id = ?", (cat_id,))
-    if c.fetchone()[0] > 0:
-        print("Warning: This category is linked to transactions.")
-
-    confirm = input("Are you sure you want to delete this category? (y/n): ").lower()
-    if confirm == "y":
-        c.execute("DELETE FROM categories WHERE id = ?", (cat_id,))
-        conn.commit()
-        print("\nCategory deleted.")
-    else:
-        print("\nDeletion cancelled.")
-
+    c.execute("SELECT id, name FROM categories WHERE id = ?", (category_id,))
+    row = c.fetchone()
     conn.close()
+    return dict(row) if row else None
 
 
-def update_category():
-    conn = sqlite3.connect('database/finance.db')
-    c = conn.cursor()
-    while True:
-        try:
-            cat_id = int(input("Enter the ID of the category to update: "))
-            c.execute("SELECT id FROM categories WHERE id = ?", (cat_id,))
-            if c.fetchone() is None:
-                print("Invalid ID. Category does not exist.")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter a number.")
-
-    old_name = c.execute("SELECT name FROM categories WHERE id = ?", (cat_id,)).fetchone()[0]
-    print("\nOld name:", old_name)
-    new_name = input("Enter new category name: ").strip()
-    if new_name == "":
-        print("Category name cannot be empty.")
-    else:
-        # Check for duplicates
-        c.execute("SELECT id FROM categories WHERE LOWER(name) = LOWER(?) AND id != ?", (new_name, cat_id))
-        if c.fetchone():
-            print("Category with this name already exists.")
-        else:
-            c.execute("UPDATE categories SET name = ? WHERE id = ?", (new_name, cat_id))
-            conn.commit()
-            print("\nCategory updated.")
-
-    conn.close()
-
-
-def search_category():
-    conn = sqlite3.connect('database/finance.db')
-    c = conn.cursor()
-
-    keyword = input("Enter category name keyword: ").strip()
+def search_categories(keyword):
+    keyword = (keyword or "").strip()
     if not keyword:
-        print("Error: Keyword cannot be empty.")
-        conn.close()
-        return
+        return False, "Keyword cannot be empty."
 
-    c.execute("SELECT id, name FROM categories WHERE LOWER(name) LIKE LOWER(?)", (f"%{keyword}%",))
-    rows = c.fetchall()
-
-    if not rows:
-        print("No matching categories found.")
-    else:
-        print("\n==== Category Search Results ====\n")
-        print(f"{'ID':<5} {'Name':<20}")
-        print("-" * 30)
-        for row in rows:
-            print(f"{row[0]:<5} {row[1]:<20}")
-
-    conn.close()
-
-
-def financial_actions():
-    conn = sqlite3.connect("database/finance.db")
+    conn = get_connection()
     c = conn.cursor()
-    while True:
-        c.execute("SELECT COUNT(*) FROM categories")
-        count = c.fetchone()[0]
-        if count == 0:
-            print("There are no categories.")
-            break
-        try:
-            choice = int(input("Would you like to:\n"
-                               "1: Update category\n"
-                               "2: Search category by name\n"
-                               "3: Search category by ID\n"
-                               "4: Delete category\n"))
-            if choice == 1:
-                update_category()
-            elif choice == 2:
-                search_category()
-            elif choice == 3:
-                search_category_by_id()
-            elif choice == 4:
-                delete_category()
-            else:
-                print("Invalid input. Please enter 1–4.")
-                continue
-            break
-        except ValueError:
-            print("Invalid input. Please enter 1–4.")
+    c.execute(
+        "SELECT id, name FROM categories WHERE LOWER(name) LIKE LOWER(?)",
+        (f"%{keyword}%",),
+    )
+    rows = [dict(r) for r in c.fetchall()]
     conn.close()
+    return True, rows
 
 
-def menu():
-    while True:
-        print("\n==== Categories Menu ====")
-        print("1: Add Category")
-        print("2: View Categories")
-        print("3: Search Category by Name")
-        print("4: Search Category by ID")
-        print("5: Financial Actions (update/delete)")
-        print("0: Back to Dashboard")
+def add_category(name):
+    name = (name or "").strip()
+    if not name:
+        return False, "Category name cannot be empty."
 
-        try:
-            choice = int(input("Select an option: "))
-            if choice == 1:
-                add_category()
-            elif choice == 2:
-                view_categories()
-            elif choice == 3:
-                search_category()
-            elif choice == 4:
-                search_category_by_id()
-            elif choice == 5:
-                financial_actions()
-            elif choice == 0:
-                break
-            else:
-                print("Invalid choice. Please enter 0–5.")
-        except ValueError:
-            print("Invalid input. Please enter a number.")
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute("SELECT id FROM categories WHERE LOWER(name) = LOWER(?)", (name,))
+    if c.fetchone():
+        conn.close()
+        return False, "Category with this name already exists."
+
+    c.execute("INSERT INTO categories (name) VALUES (?)", (name,))
+    conn.commit()
+    new_id = c.lastrowid
+    conn.close()
+    return True, {"id": new_id}
+
+
+def update_category(category_id, name):
+    """Returns (success: bool, error: str|None)."""
+    conn = get_connection()
+    c = conn.cursor()
+
+    c.execute("SELECT id FROM categories WHERE id = ?", (category_id,))
+    if c.fetchone() is None:
+        conn.close()
+        return False, "Category does not exist."
+
+    name = (name or "").strip()
+    if not name:
+        conn.close()
+        return False, "Category name cannot be empty."
+
+    c.execute(
+        "SELECT id FROM categories WHERE LOWER(name) = LOWER(?) AND id != ?",
+        (name, category_id),
+    )
+    if c.fetchone():
+        conn.close()
+        return False, "Category with this name already exists."
+
+    c.execute("UPDATE categories SET name = ? WHERE id = ?", (name, category_id))
+    conn.commit()
+    conn.close()
+    return True, None
+
+
+def get_linked_transaction_count(category_id):
+    """Returns the number of transactions linked to this category (for delete warnings)."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM transactions WHERE category_id = ?", (category_id,))
+    count = c.fetchone()[0]
+    conn.close()
+    return count
+
+
+def delete_category(category_id):
+    """Returns (success: bool, error: str|None)."""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT id FROM categories WHERE id = ?", (category_id,))
+    if c.fetchone() is None:
+        conn.close()
+        return False, "Category does not exist."
+    c.execute("DELETE FROM categories WHERE id = ?", (category_id,))
+    conn.commit()
+    conn.close()
+    return True, None

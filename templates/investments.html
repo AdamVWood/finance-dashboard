@@ -2,9 +2,112 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>Investments</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/forms.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tables.css') }}">
 </head>
 <body>
+<a href="{{ url_for('dashboard') }}">&larr; Dashboard</a>
+<h1>Investments</h1>
 
+{% if error %}
+<div class="error-box">
+    <ul>
+        {% if error is string %}
+        <li>{{ error }}</li>
+        {% else %}
+        {% for e in error %}
+        <li>{{ e }}</li>
+        {% endfor %}
+        {% endif %}
+    </ul>
+</div>
+{% endif %}
+
+<section class="filters">
+    <form method="get" action="{{ url_for('investments_page') }}">
+        <select name="mode" onchange="this.form.submit()">
+            <option value="all" {% if mode == "all" %}selected{% endif %}>All</option>
+            <option value="sort_date" {% if mode == "sort_date" %}selected{% endif %}>Sort by Date</option>
+            <option value="sort_value" {% if mode == "sort_value" %}selected{% endif %}>Sort by Total Value</option>
+            <option value="type" {% if mode == "type" %}selected{% endif %}>Filter by Type</option>
+            <option value="keyword" {% if mode == "keyword" %}selected{% endif %}>Search Keyword</option>
+            <option value="date" {% if mode == "date" %}selected{% endif %}>Date Range</option>
+            <option value="range" {% if mode == "range" %}selected{% endif %}>Quick Range</option>
+        </select>
+
+        <input type="text" name="keyword" placeholder="Keyword (name/ticker/type)">
+
+        <select name="asset_type">
+            <option value="">-- Type --</option>
+            {% for t in valid_types %}
+            <option value="{{ t }}">{{ t }}</option>
+            {% endfor %}
+        </select>
+
+        <input type="date" name="start_date">
+        <input type="date" name="end_date">
+
+        <select name="range_option">
+            <option value="">-- Quick Range --</option>
+            <option value="this_month">This Month</option>
+            <option value="last_month">Last Month</option>
+            <option value="last_3_months">Last 3 Months</option>
+            <option value="this_year">This Year</option>
+            <option value="all_time">All Time</option>
+        </select>
+
+        <button type="submit">Apply</button>
+    </form>
+</section>
+
+<table class="data-table">
+    <thead>
+    <tr>
+        <th>ID</th><th>Name</th><th>Ticker</th><th>Type</th>
+        <th>Qty</th><th>Price</th><th>Date</th><th>Created</th><th></th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for inv in investments %}
+    <tr>
+        <td>{{ inv.id }}</td>
+        <td>{{ inv.name }}</td>
+        <td>{{ inv.ticker }}</td>
+        <td>{{ inv.asset_type }}</td>
+        <td>{{ inv.quantity }}</td>
+        <td>${{ "%.2f"|format(inv.purchase_price) }}</td>
+        <td>{{ inv.purchase_date }}</td>
+        <td>{{ inv.created_at[:10] }}</td>
+        <td>
+            <form method="post" action="{{ url_for('delete_investment_route', investment_id=inv.id) }}"
+                  onsubmit="return confirm('Delete this investment?');" style="display:inline">
+                <button type="submit">Delete</button>
+            </form>
+        </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="9">No matching investments found.</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Add Investment</h2>
+<form method="post" action="{{ url_for('add_investment_route') }}" class="add-form">
+    <input type="text" name="name" placeholder="Name" required>
+    <input type="text" name="ticker" placeholder="Ticker" required>
+    <select name="asset_type" required>
+        {% for t in valid_types %}
+        <option value="{{ t }}">{{ t }}</option>
+        {% endfor %}
+    </select>
+    <input type="number" name="category_id" placeholder="Category ID" required>
+    <input type="number" step="any" name="quantity" placeholder="Quantity" required>
+    <input type="number" step="any" name="purchase_price" placeholder="Purchase Price" required>
+    <input type="date" name="purchase_date" required>
+    <button type="submit">Add Investment</button>
+</form>
 </body>
 </html>

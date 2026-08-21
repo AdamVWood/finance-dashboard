@@ -3,12 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <title>Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/forms.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tables.css') }}">
 </head>
 <body>
 <h1>Dashboard</h1>
 <nav>
     <a href="{{ url_for('transactions_page') }}">Transactions</a>
+    <a href="{{ url_for('budgets_page') }}">Budgets</a>
+    <a href="{{ url_for('categories_page') }}">Categories</a>
+    <a href="{{ url_for('investments_page') }}">Investments</a>
+    <a href="{{ url_for('savings_page') }}">Savings Goals</a>
+    <a href="{{ url_for('reports_page') }}">Reports</a>
 </nav>
 </body>
 </html>
