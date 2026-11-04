@@ -134,21 +134,6 @@ The step runs automatically the next time the app starts.
 | Logs | Warnings and errors are written to `instance/app.log` (rotated automatically). |
 | Debug mode | `FLASK_DEBUG=1 python run.py` (auto-reload while you edit code; never use it on a network). |
 
-### Bringing over data from the original version
-
-The original app stored its data in `database/finance.db`. To import it:
-
-```bash
-flask --app run import-legacy "path/to/old/database/finance.db"
-```
-
-Old `Deposit` transactions become income. Every other old type (Withdrawal, Direct Debit, Fee,
-Remittance, Transfer) becomes an expense, all in one account called "Imported account", because the old
-version had no accounts. Review them afterwards and recategorise any that were really transfers. Goals keep
-their saved amount, and budgets and investments carry over as they are.
-
----
-
 ## Security notes
 
 * The app has **no login** because it's designed for one person on one computer. It only listens on `127.0.0.1`,
