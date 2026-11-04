@@ -80,7 +80,7 @@ finance-dashboard/
 │   └── static/
 │       ├── css/app.css     # the full design system (tokens, components, light/dark)
 │       └── js/             # app.js (behaviour), charts.js (built-in SVG charts), theme.js
-├── tests/                  # pytest suite (53 tests)
+├── tests/                  # pytest suite (57 tests, including simulated-date checks)
 └── instance/               # created at runtime: finance.db, secret_key, backups/, app.log
 ```
 
