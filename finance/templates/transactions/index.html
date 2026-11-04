@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui with context %}
+{% block title %}Transactions{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Transactions</h1><p>Every income, expense and transfer across your accounts.</p></div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('transactions.import_csv') }}">{{ ui.icon("upload") }}Import</a>
+    <a class="btn" href="{{ url_for('transactions.export', **request.args) }}">{{ ui.icon("download") }}Export CSV</a>
+    <a class="btn btn-primary" href="{{ url_for('transactions.create') }}">{{ ui.icon("plus") }}Add transaction</a>
+  </div>
+</div>
+
+<form class="card mb filters-form" method="get" action="{{ url_for('transactions.index') }}" role="search">
+  <div class="filters">
+    <div class="field"><label for="q">Search</label>
+      <input id="q" type="search" name="q" value="{{ filters.q }}" placeholder="Description, notes or category"></div>
+    <div class="field"><label for="type">Type</label>
+      <select id="type" name="type" data-autosubmit><option value="">All types</option>
+        {% for k, v in types.items() %}<option value="{{ k }}" {% if filters.type == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="category_id">Category</label>
+      <select id="category_id" name="category_id" data-autosubmit><option value="">All categories</option>
+        <optgroup label="Expense">{% for c in categories if c.kind == 'expense' %}<option value="{{ c.id }}" {% if filters.category_id == c.id|string %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</optgroup>
+        <optgroup label="Income">{% for c in categories if c.kind == 'income' %}<option value="{{ c.id }}" {% if filters.category_id == c.id|string %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</optgroup>
+      </select></div>
+    <div class="field"><label for="account_id">Account</label>
+      <select id="account_id" name="account_id" data-autosubmit><option value="">All accounts</option>
+        {% for a in accounts %}<option value="{{ a.id }}" {% if filters.account_id == a.id|string %}selected{% endif %}>{{ a.name }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="period">Period</label>
+      <select id="period" name="period"><option value="">Any time</option>
+        {% for k, v in PERIODS.items() if k != 'all_time' %}<option value="{{ k }}" {% if filters.period == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></div>
+  </div>
+  <div class="filters-more" id="more-filters" {% if not (request.args.get('start') or request.args.get('end') or filters.min or filters.max) %}hidden{% endif %}>
+    <div class="field"><label for="start">From date</label><input id="start" type="date" name="start" value="{{ request.args.get('start', '') }}"></div>
+    <div class="field"><label for="end">To date</label><input id="end" type="date" name="end" value="{{ request.args.get('end', '') }}"></div>
+    <div class="field"><label for="min">Min amount</label><input id="min" type="text" inputmode="decimal" name="min" value="{{ filters.min }}"></div>
+    <div class="field"><label for="max">Max amount</label><input id="max" type="text" inputmode="decimal" name="max" value="{{ filters.max }}"></div>
+    <div class="field"><label for="sort">Sort</label>
+      <select id="sort" name="sort">{% for k, v in sorts.items() %}<option value="{{ k }}" {% if filters.sort == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></div>
+  </div>
+  <div class="row mt">
+    <button class="btn btn-primary btn-sm" type="submit">Apply</button>
+    <button class="btn btn-ghost btn-sm" type="button" data-toggle-target="more-filters">Dates, amounts &amp; sort</button>
+    {% if filters_active %}<a class="btn btn-ghost btn-sm" href="{{ url_for('transactions.index') }}">Clear filters</a>{% endif %}
+  </div>
+</form>
+
+<section class="card flush">
+  <div class="filter-summary">
+    <span><strong>{{ result.count }}</strong> transaction{{ "s" if result.count != 1 }}{% if filters_active %} match{% endif %}</span>
+    <span>Income <strong class="pos">{{ result.income_cents|money }}</strong> · Expenses <strong>{{ result.expense_cents|money }}</strong> · Net <strong class="{{ 'neg' if result.income_cents - result.expense_cents < 0 }}">{{ (result.income_cents - result.expense_cents)|money }}</strong></span>
+  </div>
+  {% if result.rows %}
+  <form method="post" action="{{ url_for('transactions.bulk_delete') }}" id="bulk-form"
+        data-confirm="Delete the selected transactions? This can't be undone." data-confirm-title="Delete transactions">
+    {{ ui.csrf() }}<input type="hidden" name="next" value="{{ request.full_path }}">
+    <div class="alert warning" data-bulk-bar hidden style="border-radius:0">
+      <div class="grow"><strong data-bulk-count>0</strong> selected</div>
+      <button class="btn btn-sm btn-danger" type="submit">{{ ui.icon("trash") }}Delete selected</button>
+    </div>
+  </form>
+  <div class="table-wrap">
+    <table class="data">
+      <thead><tr>
+        <th class="check-col"><input type="checkbox" data-select-all aria-label="Select all on this page"></th>
+        <th class="hide-sm">Date</th><th>Description</th><th class="hide-sm">Category</th><th class="hide-sm">Account</th><th class="num">Amount</th><th><span class="visually-hidden">Actions</span></th>
+      </tr></thead>
+      <tbody>
+      {% for t in result.rows %}
+      <tr>
+        <td class="check-col"><input type="checkbox" name="ids" value="{{ t.id }}" form="bulk-form" data-select-row aria-label="Select {{ t.description }}"></td>
+        <td class="tnum hide-sm" style="white-space:nowrap">{{ t.date|nicedate }}</td>
+        <td class="desc">{{ t.description }}<span class="sub show-sm">{{ t.date|nicedate }} · {{ t.category_name or "Transfer" }}</span>{% if t.notes %}<span class="sub">{{ t.notes }}</span>{% endif %}{% if t.recurring_id %}<span class="sub">Recurring</span>{% endif %}</td>
+        <td class="hide-sm">{% if t.type == 'transfer' %}<span class="badge transfer">Transfer</span>{% else %}<span class="cat"><span class="dot" style="background:{{ t.category_color or 'var(--s-other)' }}"></span>{{ t.category_name }}</span>{% endif %}</td>
+        <td class="hide-sm muted">{{ t.account_name }}{% if t.to_account_name %} → {{ t.to_account_name }}{% endif %}</td>
+        <td class="num">{{ ui.amount(t) }}</td>
+        <td class="actions">
+          <a class="btn btn-ghost btn-sm icon-btn" href="{{ url_for('transactions.edit', txn_id=t.id, next=request.full_path) }}" title="Edit">{{ ui.icon("edit") }}<span class="visually-hidden">Edit</span></a>
+          <a class="btn btn-ghost btn-sm icon-btn hide-sm" href="{{ url_for('transactions.duplicate', txn_id=t.id) }}" title="Duplicate">{{ ui.icon("copy") }}<span class="visually-hidden">Duplicate</span></a>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {{ ui.pager(result) }}
+  {% elif filters_active %}
+    {{ ui.empty("No matching transactions", "Try a different search or clear the filters.", None, None, "transactions") }}
+  {% else %}
+    {{ ui.empty("No transactions found", "Add your first transaction to start tracking your finances, or import a CSV from your bank.", url_for('transactions.create'), "Add transaction", "transactions") }}
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui with context %}
+{% block title %}{{ "Edit" if goal else "New" }} goal{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="crumbs"><a href="{{ url_for('goals.index') }}">Savings goals</a> /</div><h1>{{ "Edit " ~ goal.name if goal else "New savings goal" }}</h1></div></div>
+
+<form class="card form" method="post" novalidate>
+  {{ ui.csrf() }}
+  {{ ui.form_errors(errors) }}
+  <div class="form-grid">
+    {{ ui.input("name", "Goal name", form, errors, required=True, cls="full", attrs='maxlength="80" placeholder="e.g. Emergency fund"') }}
+    {{ ui.money("target", "Target amount", form, errors) }}
+    {% if not goal %}{{ ui.money("initial", "Already saved", form, errors, required=False, hint="Recorded as the starting balance.") }}{% endif %}
+    {{ ui.input("start_date", "Start date", form, errors, type="date", hint="Used to judge whether you're on track.") }}
+    {{ ui.input("deadline", "Deadline", form, errors, type="date") }}
+    {{ ui.textarea("notes", "Notes", form, errors, rows=2) }}
+    {% if goal %}<label class="check full"><input type="checkbox" name="is_archived" value="1" {% if form.get('is_archived') %}checked{% endif %}> Archived (hide from the goals page and dashboard)</label>{% endif %}
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">{{ "Save changes" if goal else "Create goal" }}</button>
+    <a class="btn btn-ghost" href="{{ url_for('goals.detail', goal_id=goal.id) if goal else url_for('goals.index') }}">Cancel</a>
+  </div>
+</form>
+{% if goal %}
+<form class="mt" method="post" action="{{ url_for('goals.delete', goal_id=goal.id) }}" data-confirm="Delete the goal “{{ goal.name }}” and its history?" data-confirm-title="Delete goal">
+  {{ ui.csrf() }}<button class="btn btn-danger" type="submit">{{ ui.icon("trash") }}Delete goal</button>
+</form>
+{% endif %}
+{% endblock %}

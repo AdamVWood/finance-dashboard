@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui with context %}
+{% block title %}{{ "Edit" if h else "Add" }} investment{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="crumbs"><a href="{{ url_for('investments.index') }}">Investments</a> /</div><h1>{{ "Edit " ~ h.name if h else "Add investment" }}</h1></div></div>
+
+<form class="card form" method="post" novalidate>
+  {{ ui.csrf() }}
+  {{ ui.form_errors(errors) }}
+  <div class="form-grid">
+    {{ ui.input("name", "Name", form, errors, required=True, attrs='maxlength="100" placeholder="e.g. Vanguard Total World ETF"') }}
+    {{ ui.input("ticker", "Ticker / symbol", form, errors, attrs='maxlength="20" placeholder="e.g. VT"') }}
+    {{ ui.select("asset_type", "Asset type", types.items(), form, errors) }}
+    {{ ui.input("purchase_date", "Purchase date", form, errors, type="date", required=True) }}
+    {{ ui.input("quantity", "Quantity / units", form, errors, required=True, attrs='inputmode="decimal" placeholder="e.g. 10 or 0.025"') }}
+    {{ ui.input("purchase_price", "Price paid per unit", form, errors, required=True, attrs='inputmode="decimal"', hint="Include fees if you want them in the cost basis.") }}
+    {{ ui.input("current_price", "Current price per unit", form, errors, attrs='inputmode="decimal"', hint="Leave blank to value it at the purchase price. Each change is saved to the price history.") }}
+    <div class="field full {% if errors.get('funding_account_id') %}has-error{% endif %}">
+      <label for="f-funding_account_id">Paid from account <span class="faint">(optional)</span></label>
+      <select id="f-funding_account_id" name="funding_account_id">
+        <option value="">Not tracked - money came from outside the app</option>
+        {% for a in accounts %}<option value="{{ a.id }}" {% if form.get('funding_account_id')|string == a.id|string %}selected{% endif %}>{{ a.name }}</option>{% endfor %}
+      </select>
+      <span class="hint">If set, the cost is taken out of that account's balance on the purchase date, so your net worth doesn't count the money twice. It isn't counted as spending.</span>
+      {{ ui.field_error(errors, "funding_account_id") }}
+    </div>
+    {{ ui.textarea("notes", "Notes", form, errors, rows=2) }}
+  </div>
+  <p class="small muted mt">For several purchases of the same asset at different prices, either add each purchase separately or enter the total units with the average price paid.</p>
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">{{ "Save changes" if h else "Add investment" }}</button>
+    <a class="btn btn-ghost" href="{{ url_for('investments.detail', holding_id=h.id) if h else url_for('investments.index') }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui with context %}
+{% block title %}Accounts & net worth{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Accounts &amp; net worth</h1><p>Assets − liabilities = net worth. Balances update from your transactions.</p></div>
+  <div class="actions"><a class="btn btn-primary" href="{{ url_for('accounts.create') }}">{{ ui.icon("plus") }}Add account</a></div>
+</div>
+
+<section class="kpis">
+  <div class="card kpi hero"><div class="label">Net worth</div><div class="value">{{ worth.net_worth_cents|money(decimals=False) }}</div><div class="meta">As of today</div></div>
+  <div class="card kpi"><div class="label">Cash &amp; bank</div><div class="value">{{ worth.cash_assets_cents|money(decimals=False) }}</div><div class="meta">Chequing, savings, cash, other assets</div></div>
+  <div class="card kpi"><div class="label">Investments</div><div class="value">{{ worth.investments_cents|money(decimals=False) }}</div><div class="meta"><a href="{{ url_for('investments.index') }}">Market value</a></div></div>
+  <div class="card kpi"><div class="label">Liabilities</div><div class="value">{{ worth.liabilities_cents|money(decimals=False) }}</div><div class="meta">Cards, loans and other debt</div></div>
+</section>
+
+<section class="card mb">
+  <div class="card-head"><h2>Net worth history <span class="sub">· month end, last 12 months</span></h2></div>
+  <div class="chart" data-chart="line" data-source="nw-data" data-path="series" data-height="250"
+       data-series='[{"key":"net","label":"Net worth","color":"--s1"},{"key":"assets","label":"Assets","color":"--s3","dash":true},{"key":"liabilities","label":"Liabilities","color":"--s2","dash":true}]'
+       aria-label="Net worth, assets and liabilities over time" data-empty="Add accounts to see your net worth history."></div>
+  <details class="table-view"><summary>Show as table</summary>
+    <div class="table-wrap"><table class="data compact"><thead><tr><th>Month</th><th class="num">Assets</th><th class="num">Liabilities</th><th class="num">Net worth</th></tr></thead>
+    <tbody>{% for p in history|reverse %}<tr><td>{{ p.label }}</td><td class="num">{{ p.assets_cents|money }}</td><td class="num">{{ p.liabilities_cents|money }}</td><td class="num"><strong>{{ p.net_worth_cents|money }}</strong></td></tr>{% endfor %}</tbody></table></div>
+  </details>
+</section>
+
+{% if accounts %}
+{% for group, liab in [("Assets", false), ("Liabilities", true)] %}
+{% set rows = accounts|selectattr("is_liability", "equalto", liab)|list %}
+{% if rows %}
+<section class="card flush mb">
+  <div class="card-head"><h2>{{ group }}</h2></div>
+  <div class="table-wrap"><table class="data">
+    <thead><tr><th>Account</th><th class="hide-sm">Type</th><th class="hide-sm">Institution</th><th class="num">{{ "Owed" if liab else "Balance" }}</th><th></th></tr></thead>
+    <tbody>
+    {% for a in rows %}
+    <tr {% if a.is_archived %}class="faint"{% endif %}>
+      <td class="desc"><a href="{{ url_for('accounts.detail', account_id=a.id) }}">{{ a.name }}</a>{% if a.is_archived %} <span class="badge">Archived</span>{% endif %}<span class="sub">{{ a.txn_count }} transaction{{ "s" if a.txn_count != 1 }}</span></td>
+      <td class="hide-sm">{{ a.type_label }}</td>
+      <td class="hide-sm muted">{{ a.institution or "—" }}</td>
+      <td class="num"><strong>{% if liab %}{{ (-a.balance_cents)|money }}{% else %}<span class="{{ 'neg' if a.balance_cents < 0 }}">{{ a.balance_cents|money }}</span>{% endif %}</strong></td>
+      <td class="actions"><a class="btn btn-ghost btn-sm icon-btn" href="{{ url_for('accounts.edit', account_id=a.id) }}" title="Edit">{{ ui.icon("edit") }}<span class="visually-hidden">Edit {{ a.name }}</span></a></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% endif %}
+{% endfor %}
+{% else %}
+<section class="card">{{ ui.empty("No accounts yet", "Add your bank accounts, cash, credit cards and loans with their current balances to start tracking net worth.", url_for('accounts.create'), "Add account", "accounts") }}</section>
+{% endif %}
+<p class="small muted">Savings goals don't add to net worth - they earmark money that's already in your accounts.</p>
+<script type="application/json" id="nw-data">{{ chart|tojson }}</script>
+{% endblock %}

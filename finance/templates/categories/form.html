@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui with context %}
+{% block title %}{{ "Edit" if category else "New" }} category{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="crumbs"><a href="{{ url_for('categories.index') }}">Categories</a> /</div><h1>{{ "Edit " ~ category.name if category else "New category" }}</h1></div></div>
+
+<form class="card form" method="post" novalidate>
+  {{ ui.csrf() }}
+  {{ ui.form_errors(errors) }}
+  <div class="form-grid">
+    {{ ui.input("name", "Name", form, errors, required=True, attrs='maxlength="60"') }}
+    {{ ui.select("kind", "Type", kinds.items(), form, errors) }}
+    <div class="field"><label for="f-color">Colour</label><input id="f-color" type="color" name="color" value="{{ form.get('color') or '#2a78d6' }}">{{ ui.field_error(errors, "color") }}</div>
+    {% if category %}<label class="check"><input type="checkbox" name="is_archived" value="1" {% if form.get('is_archived') %}checked{% endif %}> Archived (hidden from new transactions)</label>{% endif %}
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">{{ "Save changes" if category else "Add category" }}</button>
+    <a class="btn btn-ghost" href="{{ url_for('categories.index') }}">Cancel</a>
+  </div>
+</form>
+
+{% if category %}
+<form class="card form mt" method="post" action="{{ url_for('categories.delete', category_id=category.id) }}"
+      data-confirm="Delete the category “{{ category.name }}”? Its budgets will be removed." data-confirm-title="Delete category">
+  {{ ui.csrf() }}
+  <h2>Delete category</h2>
+  {% if category.txn_count %}
+  <p class="small muted mt">{{ category.txn_count }} transaction(s) use this category. Choose where to move them before deleting.</p>
+  <div class="field" style="max-width:340px"><label for="reassign_to">Move transactions to</label>
+    <select id="reassign_to" name="reassign_to" required><option value="">Choose a category…</option>
+      {% for o in others %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}</select></div>
+  {% else %}<p class="small muted mt">No transactions use this category.</p>{% endif %}
+  <div class="form-actions"><button class="btn btn-danger" type="submit">{{ ui.icon("trash") }}Delete category</button></div>
+</form>
+{% endif %}
+{% endblock %}

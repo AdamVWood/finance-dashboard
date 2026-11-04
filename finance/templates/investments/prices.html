@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui with context %}
+{% block title %}Update prices{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="crumbs"><a href="{{ url_for('investments.index') }}">Investments</a> /</div><h1>Update prices</h1>
+  <p>Enter today's price per unit for any holdings that changed. Blank rows are left as they are.</p></div></div>
+
+<form class="card flush" method="post" novalidate>
+  {{ ui.csrf() }}
+  <div class="row" style="padding:16px 20px">
+    <div class="field" style="max-width:220px"><label for="date">Price date</label><input id="date" type="date" name="date" value="{{ date }}" max="{{ today_iso }}"></div>
+  </div>
+  <div class="table-wrap"><table class="data">
+    <thead><tr><th>Holding</th><th class="num hide-sm">Quantity</th><th class="num">Last price</th><th style="width:200px">New price</th></tr></thead>
+    <tbody>
+    {% for h in holdings %}
+    {% set key = "price_" ~ h.id %}
+    <tr><td class="desc">{{ h.name }}<span class="sub">{{ h.ticker or h.type_label }}{% if h.price_date %} · {{ h.price_date|nicedate }}{% endif %}</span></td>
+      <td class="num hide-sm">{{ h.quantity|qty }}</td>
+      <td class="num">{{ "{:,.4f}".format(h.effective_price) }}</td>
+      <td><input type="text" inputmode="decimal" name="{{ key }}" value="{{ submitted.get(key, '') }}" aria-label="New price for {{ h.name }}" class="{{ 'has-error' if errors.get(key) }}">
+        {% if errors.get(key) %}<span class="small neg">{{ errors[key] }}</span>{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <div class="card-foot row"><button class="btn btn-primary" type="submit">Save prices</button><a class="btn btn-ghost" href="{{ url_for('investments.index') }}">Cancel</a></div>
+</form>
+{% endblock %}

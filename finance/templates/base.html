@@ -1,0 +1,85 @@
+{% import "partials/macros.html" as ui with context %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% endblock %} · Finance Dashboard</title>
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="{{ url_for('static', filename='favicon.svg') }}" type="image/svg+xml">
+  <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+{% set section = request.blueprint %}
+<body data-currency="{{ settings.currency_symbol or '$' }}">
+<a class="skip-link" href="#content">Skip to content</a>
+<div class="app">
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('dashboard.index') }}"><span class="brand-mark">$</span>Finance</a>
+    <button class="btn btn-ghost icon-btn" type="button" data-nav-toggle aria-expanded="false" aria-controls="sidebar">
+      {{ ui.icon("menu") }}<span class="visually-hidden">Menu</span>
+    </button>
+  </header>
+
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="{{ url_for('dashboard.index') }}">
+      <span class="brand-mark">$</span>
+      <span>Finance<small>{{ settings.owner_name or "Budget & investments" }}</small></span>
+    </a>
+    <nav class="nav" aria-label="Main">
+      {% set nav_items = [
+        ("dashboard", "dashboard.index", "Dashboard"),
+        ("transactions", "transactions.index", "Transactions"),
+        ("accounts", "accounts.index", "Accounts & net worth"),
+        ("budgets", "budgets.index", "Budgets"),
+        ("goals", "goals.index", "Savings goals"),
+        ("investments", "investments.index", "Investments"),
+      ] %}
+      {% for key, endpoint, label in nav_items %}
+      <a href="{{ url_for(endpoint) }}" {% if section == key %}aria-current="page"{% endif %}>{{ ui.icon(key) }}{{ label }}</a>
+      {% endfor %}
+      <div class="nav-label">Planning & insight</div>
+      <a href="{{ url_for('recurring.index') }}" {% if section == 'recurring' %}aria-current="page"{% endif %}>{{ ui.icon("recurring") }}Recurring</a>
+      <a href="{{ url_for('reports.index') }}" {% if section == 'reports' %}aria-current="page"{% endif %}>{{ ui.icon("reports") }}Reports</a>
+      <div class="nav-label">Manage</div>
+      <a href="{{ url_for('categories.index') }}" {% if section == 'categories' %}aria-current="page"{% endif %}>{{ ui.icon("categories") }}Categories</a>
+      <a href="{{ url_for('settings.index') }}" {% if section == 'settings' %}aria-current="page"{% endif %}>{{ ui.icon("settings") }}Settings & backup</a>
+    </nav>
+    <div class="sidebar-foot">
+      <a class="btn btn-primary" style="flex:1" href="{{ url_for('transactions.create') }}">{{ ui.icon("plus") }}Add transaction</a>
+      <button class="btn icon-btn" type="button" data-theme-toggle title="Switch light/dark theme">{{ ui.icon("moon") }}<span class="visually-hidden">Toggle dark mode</span></button>
+    </div>
+  </aside>
+
+  <main class="main" id="content">
+    <div class="page">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="flashes" role="status">
+        {% for category, message in messages %}
+        <div class="alert {{ 'error' if category == 'error' else category }}" {% if category == 'success' %}data-autohide{% endif %}>
+          {{ ui.icon("check" if category == "success" else ("alert" if category == "error" else "info")) }}
+          <div class="grow">{{ message }}</div>
+          <button class="dismiss" type="button" data-dismiss aria-label="Dismiss">×</button>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</div>
+
+<dialog class="confirm" id="confirm-dialog" aria-labelledby="confirm-title">
+  <h2 id="confirm-title" data-confirm-title>Are you sure?</h2>
+  <p data-confirm-text></p>
+  <div class="row">
+    <button class="btn" type="button" data-confirm-cancel>Cancel</button>
+    <button class="btn btn-danger solid" type="button" data-confirm-ok>Delete</button>
+  </div>
+</dialog>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+</body>
+</html>

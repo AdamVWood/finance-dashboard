@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui with context %}
+{% block title %}Settings & backup{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Settings &amp; backup</h1><p>Preferences, and keeping your data safe.</p></div></div>
+
+<div class="grid grid-2">
+  <form class="card" method="post" novalidate>
+    {{ ui.csrf() }}
+    <div class="card-head"><h2>Preferences</h2></div>
+    <div class="stack">
+      {{ ui.input("owner_name", "Your name", current, {}, attrs='maxlength="60"', hint="Shown on the dashboard greeting.") }}
+      <div class="form-grid">
+        <div class="field"><label for="f-currency_code">Currency</label>
+          <select id="f-currency_code" name="currency_code">{% for code in currencies %}<option value="{{ code }}" {% if current.currency_code == code %}selected{% endif %}>{{ code }}</option>{% endfor %}</select></div>
+        {{ ui.input("currency_symbol", "Symbol", current, {}, attrs='maxlength="4"', hint="Leave blank for the currency's default.") }}
+      </div>
+      <p class="small muted">All amounts are in one currency. Changing it only changes how amounts are labelled - nothing is converted.</p>
+      <div><button class="btn btn-primary" type="submit">Save preferences</button></div>
+    </div>
+  </form>
+
+  <section class="card">
+    <div class="card-head"><h2>Backup</h2></div>
+    <p class="small muted">Download a complete copy of your data as a single file. Keep it somewhere safe - for example OneDrive or Google Drive.</p>
+    <div class="row"><a class="btn btn-primary" href="{{ url_for('settings.backup') }}">{{ ui.icon("download") }}Download backup</a>
+      <a class="btn" href="{{ url_for('transactions.export') }}">{{ ui.icon("download") }}Transactions CSV</a></div>
+    <hr style="border:0;border-top:1px solid var(--border);margin:20px 0">
+    <h3>Restore from a backup</h3>
+    <form method="post" action="{{ url_for('settings.restore') }}" enctype="multipart/form-data" class="stack mt">
+      {{ ui.csrf() }}
+      <input type="file" name="file" accept=".db,.sqlite,.sqlite3" required aria-label="Backup file">
+      <div class="field"><label for="confirm-restore">Type RESTORE to confirm</label><input id="confirm-restore" type="text" name="confirm" autocomplete="off"></div>
+      <p class="small muted">This replaces everything currently in the app. A safety copy of the current data is saved first.</p>
+      <div><button class="btn" type="submit">{{ ui.icon("upload") }}Restore</button></div>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Sample data</h2></div>
+    {% if has_data %}
+      <p class="small muted">Sample data can only be loaded into an empty app. Erase all data first if you want to try it.</p>
+    {% else %}
+      <p class="small muted">Fill the app with 12 months of realistic example data to explore every feature.</p>
+      <form method="post" action="{{ url_for('settings.load_demo') }}">{{ ui.csrf() }}<button class="btn" type="submit">Load sample data</button></form>
+    {% endif %}
+    {% if safety_backups %}
+    <h3 class="mt-lg">Automatic safety copies</h3>
+    <p class="small muted">Saved in <code>instance/backups/</code> before every restore or erase.</p>
+    <ul class="list small">{% for b in safety_backups %}<li><span class="grow">{{ b.name }}</span><span class="faint">{{ b.size_kb }} KB</span></li>{% endfor %}</ul>
+    {% endif %}
+  </section>
+
+  <section class="card" style="border-color:var(--bad)">
+    <div class="card-head"><h2 class="neg">Erase all data</h2></div>
+    <p class="small muted">Deletes every account, transaction, budget, goal and investment, and restores the default categories. A safety copy is saved first.</p>
+    <form method="post" action="{{ url_for('settings.reset') }}" class="stack">
+      {{ ui.csrf() }}
+      <div class="field"><label for="confirm-reset">Type DELETE to confirm</label><input id="confirm-reset" type="text" name="confirm" autocomplete="off"></div>
+      <div><button class="btn btn-danger" type="submit">{{ ui.icon("trash") }}Erase everything</button></div>
+    </form>
+  </section>
+</div>
+{% endblock %}

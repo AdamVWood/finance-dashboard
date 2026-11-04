@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui with context %}
+{% block title %}Savings goals{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Savings goals</h1><p>Targets you're saving towards, with what you need each month to hit the deadline.</p></div>
+  <div class="actions">
+    <a class="btn btn-ghost" href="{{ url_for('goals.index', archived=None if show_archived else 1) }}">{{ "Hide archived" if show_archived else "Show archived" }}</a>
+    <a class="btn btn-primary" href="{{ url_for('goals.create') }}">{{ ui.icon("plus") }}New goal</a>
+  </div>
+</div>
+
+{% if goals %}
+<section class="kpis">
+  <div class="card kpi"><div class="label">Saved so far</div><div class="value">{{ saved|money(decimals=False) }}</div><div class="meta">Across active goals</div></div>
+  <div class="card kpi"><div class="label">Total targets</div><div class="value">{{ target|money(decimals=False) }}</div><div class="meta">{{ (saved / target * 100 if target else 0)|pct }} complete overall</div></div>
+  <div class="card kpi"><div class="label">Needed per month</div><div class="value">{{ monthly_needed|money(decimals=False) }}</div><div class="meta">To meet every deadline</div></div>
+</section>
+
+<div class="grid grid-3">
+{% for g in goals %}
+  <article class="card goal-card" {% if g.is_archived %}style="opacity:.7"{% endif %}>
+    <div class="row between">
+      <h2><a href="{{ url_for('goals.detail', goal_id=g.id) }}" style="color:inherit">{{ g.name }}</a></h2>
+      {{ ui.status(g.status, g.status_label) }}
+    </div>
+    <div class="amounts"><span class="big">{{ g.saved_cents|money(decimals=False) }}</span><span class="muted small">of {{ g.target_cents|money(decimals=False) }}</span></div>
+    {{ ui.progress(g.progress_pct, g.status, marker=g.expected_pct, lg=True, label=g.name ~ " progress") }}
+    <dl>
+      <dt>Progress</dt><dd>{{ g.progress_pct|pct(1) }}</dd>
+      <dt>Remaining</dt><dd>{{ g.remaining_cents|money(decimals=False) }}</dd>
+      <dt>Deadline</dt><dd>{{ g.deadline|nicedate if g.deadline else "None" }}</dd>
+      <dt>{{ "Needed / month" if g.required_monthly_cents else "Recent pace" }}</dt>
+      <dd>{% if g.required_monthly_cents %}{{ g.required_monthly_cents|money(decimals=False) }}{% elif g.monthly_pace_cents %}{{ g.monthly_pace_cents|money(decimals=False) }}/mo{% else %}—{% endif %}</dd>
+      {% if g.projected_date and g.status != 'done' %}<dt>At current pace</dt><dd>{{ g.projected_date|nicedate("%b %Y") }}</dd>{% endif %}
+    </dl>
+    {% if g.status != 'done' and not g.is_archived %}
+    <form method="post" action="{{ url_for('goals.contribute', goal_id=g.id) }}" class="row" novalidate>
+      {{ ui.csrf() }}<input type="hidden" name="next" value="index">
+      <div class="money-input" style="flex:1;min-width:110px"><span>{{ settings.currency_symbol or "$" }}</span>
+        <input type="text" inputmode="decimal" name="amount" placeholder="Amount" aria-label="Amount to add to {{ g.name }}" required></div>
+      <button class="btn btn-sm" type="submit">{{ ui.icon("plus") }}Add</button>
+    </form>
+    {% endif %}
+  </article>
+{% endfor %}
+</div>
+<p class="small muted mt">The thin marker on each bar shows where you'd be if you saved evenly from the start date to the deadline.</p>
+{% else %}
+<section class="card">{{ ui.empty("No savings goals yet", "Create a goal such as an emergency fund, a laptop or a trip, then record money as you set it aside.", url_for('goals.create'), "New goal", "goals") }}</section>
+{% endif %}
+{% endblock %}

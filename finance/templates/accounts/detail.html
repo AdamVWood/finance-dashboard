@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui with context %}
+{% block title %}{{ account.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><div class="crumbs"><a href="{{ url_for('accounts.index') }}">Accounts</a> /</div>
+    <h1>{{ account.name }} {% if account.is_archived %}<span class="badge">Archived</span>{% endif %}</h1>
+    <p>{{ account.type_label }}{% if account.institution %} · {{ account.institution }}{% endif %} · opened {{ account.opened_on|nicedate }}</p></div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('accounts.edit', account_id=account.id) }}">{{ ui.icon("edit") }}Edit</a>
+    <a class="btn btn-primary" href="{{ url_for('transactions.create', account_id=account.id) }}">{{ ui.icon("plus") }}Add transaction</a>
+  </div>
+</div>
+
+<section class="kpis">
+  <div class="card kpi"><div class="label">{{ "Amount owed" if account.is_liability else "Current balance" }}</div>
+    <div class="value {{ 'neg' if (not account.is_liability and account.balance_cents < 0) }}">{{ (-account.balance_cents if account.is_liability else account.balance_cents)|money }}</div></div>
+  <div class="card kpi"><div class="label">{{ "Owed when opened" if account.is_liability else "Opening balance" }}</div>
+    <div class="value">{{ (-account.opening_balance_cents if account.is_liability else account.opening_balance_cents)|money }}</div></div>
+  <div class="card kpi"><div class="label">Transactions</div><div class="value">{{ result.count }}</div></div>
+</section>
+{% if account.notes %}<p class="muted">{{ account.notes }}</p>{% endif %}
+
+<section class="card flush">
+  <div class="card-head"><h2>Activity</h2><a href="{{ url_for('transactions.index', account_id=account.id) }}">Search &amp; filter</a></div>
+  {% if result.rows %}
+  <div class="table-wrap mt"><table class="data">
+    <thead><tr><th>Date</th><th>Description</th><th class="hide-sm">Category</th><th class="num">Effect on balance</th></tr></thead>
+    <tbody>
+    {% for t in result.rows %}
+    {% set incoming = t.type == 'income' or (t.type == 'transfer' and t.to_account_id == account.id) %}
+    <tr>
+      <td class="tnum" style="white-space:nowrap">{{ t.date|nicedate }}</td>
+      <td class="desc"><a href="{{ url_for('transactions.edit', txn_id=t.id, next=request.path) }}" style="color:inherit">{{ t.description }}</a>
+        {% if t.type == 'transfer' %}<span class="sub">{{ "From " ~ t.account_name if incoming else "To " ~ t.to_account_name }}</span>{% endif %}</td>
+      <td class="hide-sm">{{ t.category_name or "Transfer" }}</td>
+      <td class="num"><span class="{{ 'pos' if incoming }}">{{ "+" if incoming else "−" }}{{ t.amount_cents|money }}</span></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {{ ui.pager(result) }}
+  {% else %}
+  {{ ui.empty("No activity yet", "Transactions recorded against this account will show here.", url_for('transactions.create', account_id=account.id), "Add transaction", "transactions") }}
+  {% endif %}
+</section>
+
+{% if not result.count %}
+<form class="mt" method="post" action="{{ url_for('accounts.delete', account_id=account.id) }}" data-confirm="Delete the account “{{ account.name }}”?" data-confirm-title="Delete account">
+  {{ ui.csrf() }}<button class="btn btn-danger" type="submit">{{ ui.icon("trash") }}Delete account</button>
+</form>
+{% else %}
+<p class="small muted mt">Accounts with transactions can't be deleted - archive it from the edit page to hide it instead.</p>
+{% endif %}
+{% endblock %}

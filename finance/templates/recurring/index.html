@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui with context %}
+{% block title %}Recurring{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><h1>Recurring transactions</h1><p>Salary, rent, bills and subscriptions. When one falls due you choose to post it - nothing is added behind your back.</p></div>
+  <div class="actions"><a class="btn btn-primary" href="{{ url_for('recurring.create') }}">{{ ui.icon("plus") }}New recurring item</a></div>
+</div>
+
+{% if due %}
+<section class="card mb">
+  <div class="card-head"><h2>Due now <span class="sub">· {{ due|length }} occurrence{{ "s" if due|length != 1 }}</span></h2>
+    <form method="post" action="{{ url_for('recurring.post_due') }}" class="inline-form">{{ ui.csrf() }}<button class="btn btn-primary btn-sm" type="submit">{{ ui.icon("check") }}Post all</button></form></div>
+  <ul class="list">
+    {% for item, when in due %}
+    <li><div class="grow"><div class="title">{{ item.description }}</div><div class="sub">{{ when|nicedate }} · {{ item.account_name }}</div></div>
+      {{ ui.amount(item) }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if items %}
+<section class="kpis">
+  <div class="card kpi"><div class="label">Regular income / month</div><div class="value">{{ monthly_in|money(decimals=False) }}</div></div>
+  <div class="card kpi"><div class="label">Regular bills / month</div><div class="value">{{ monthly_out|money(decimals=False) }}</div></div>
+  <div class="card kpi"><div class="label">Left after bills</div><div class="value {{ 'neg' if monthly_in - monthly_out < 0 }}">{{ (monthly_in - monthly_out)|money(decimals=False) }}</div><div class="meta">Before day-to-day spending</div></div>
+</section>
+<section class="card flush">
+  <div class="table-wrap"><table class="data">
+    <thead><tr><th>Item</th><th class="hide-sm">Schedule</th><th>Next</th><th class="num">Amount</th><th></th></tr></thead>
+    <tbody>
+    {% for it in items %}
+    <tr {% if not it.is_active or it.finished %}class="faint"{% endif %}>
+      <td class="desc">{{ it.description }}<span class="sub">{% if it.type == 'transfer' %}{{ it.account_name }} → {{ it.to_account_name }}{% else %}{{ it.category_name }} · {{ it.account_name }}{% endif %}</span></td>
+      <td class="hide-sm">{{ it.frequency_label }}{% if it.end_date %}<span class="small faint" style="display:block">until {{ it.end_date|nicedate }}</span>{% endif %}</td>
+      <td class="tnum">{% if it.finished %}<span class="badge">Finished</span>{% elif not it.is_active %}<span class="badge">Paused</span>{% else %}{{ it.next_date|nicedate }}{% if it.is_due %} <span class="badge warn">Due</span>{% endif %}{% endif %}</td>
+      <td class="num">{{ ui.amount(it) }}</td>
+      <td class="actions">
+        {% if it.is_due %}<form class="inline-form" method="post" action="{{ url_for('recurring.post_due') }}">{{ ui.csrf() }}<input type="hidden" name="item_id" value="{{ it.id }}"><button class="btn btn-sm" type="submit">Post</button></form>{% endif %}
+        {% if it.is_active and not it.finished %}<form class="inline-form" method="post" action="{{ url_for('recurring.skip', item_id=it.id) }}">{{ ui.csrf() }}<button class="btn btn-ghost btn-sm" type="submit" title="Skip the next occurrence without posting it">Skip</button></form>{% endif %}
+        <a class="btn btn-ghost btn-sm icon-btn" href="{{ url_for('recurring.edit', item_id=it.id) }}" title="Edit">{{ ui.icon("edit") }}<span class="visually-hidden">Edit</span></a>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</section>
+{% else %}
+<section class="card">{{ ui.empty("No recurring items", "Add your salary, rent, phone bill and subscriptions so they're quick to record and show up as upcoming on the dashboard.", url_for('recurring.create'), "New recurring item", "recurring") }}</section>
+{% endif %}
+{% endblock %}

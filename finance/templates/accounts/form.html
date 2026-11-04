@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui with context %}
+{% block title %}{{ "Edit" if account else "Add" }} account{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="crumbs"><a href="{{ url_for('accounts.index') }}">Accounts</a> /</div><h1>{{ "Edit " ~ account.name if account else "Add account" }}</h1></div></div>
+
+<form class="card form" method="post" data-account-form data-liabilities='{{ liability_types|list|tojson }}' novalidate>
+  {{ ui.csrf() }}
+  {{ ui.form_errors(errors) }}
+  <div class="form-grid">
+    {{ ui.input("name", "Account name", form, errors, required=True, attrs='maxlength="60" placeholder="e.g. Everyday chequing"') }}
+    <div class="field {% if errors.get('type') %}has-error{% endif %}">
+      <label for="f-type">Type</label>
+      <select id="f-type" name="type" required>
+        <optgroup label="Assets">{% for k, v in types.items() if k not in liability_types %}<option value="{{ k }}" {% if form.get('type') == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</optgroup>
+        <optgroup label="Liabilities">{% for k, v in types.items() if k in liability_types %}<option value="{{ k }}" {% if form.get('type') == k %}selected{% endif %}>{{ v }}</option>{% endfor %}</optgroup>
+      </select>
+      {{ ui.field_error(errors, "type") }}
+    </div>
+    {{ ui.input("institution", "Bank or lender", form, errors, attrs='maxlength="80"') }}
+    {{ ui.input("opened_on", "Balance date", form, errors, type="date", hint="The date the opening balance below applies from.") }}
+    <div class="field full {% if errors.get('opening_balance') %}has-error{% endif %}">
+      <label for="f-opening_balance"><span data-asset-only>Opening balance</span><span data-liability-only hidden>Amount owed on that date</span> <span class="faint">(optional)</span></label>
+      <div class="money-input"><span>{{ settings.currency_symbol or "$" }}</span>
+        <input id="f-opening_balance" type="text" inputmode="decimal" name="opening_balance" value="{{ form.get('opening_balance', '') }}" placeholder="0.00"></div>
+      <span class="hint" data-asset-only>What was in the account on the balance date. Use a minus sign for an overdrawn account.</span>
+      <span class="hint" data-liability-only hidden>Enter as a positive number. Payments to this account are recorded as transfers from another account; purchases on a card are expenses paid from it.</span>
+      {{ ui.field_error(errors, "opening_balance") }}
+    </div>
+    {{ ui.textarea("notes", "Notes", form, errors, rows=2) }}
+    {% if account %}<label class="check full"><input type="checkbox" name="is_archived" value="1" {% if form.get('is_archived') %}checked{% endif %}> Archived (hidden from forms; history and balance are kept)</label>{% endif %}
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">{{ "Save changes" if account else "Add account" }}</button>
+    <a class="btn btn-ghost" href="{{ url_for('accounts.detail', account_id=account.id) if account else url_for('accounts.index') }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

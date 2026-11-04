@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui with context %}
+{% block title %}{{ "Edit" if item else "New" }} recurring item{% endblock %}
+{% block content %}
+<div class="page-head"><div><div class="crumbs"><a href="{{ url_for('recurring.index') }}">Recurring</a> /</div><h1>{{ "Edit " ~ item.description if item else "New recurring item" }}</h1></div></div>
+
+{% if not accounts %}
+<div class="card">{{ ui.empty("Add an account first", "Recurring items are posted to one of your accounts.", url_for('accounts.create'), "Add account", "accounts") }}</div>
+{% else %}
+<form class="card form" method="post" data-type-form novalidate>
+  {{ ui.csrf() }}
+  {{ ui.form_errors(errors) }}
+  <div class="form-grid">
+    {{ ui.type_switch(form, types) }}
+    {{ ui.txn_fields(form, errors, accounts, income_categories, expense_categories) }}
+    {{ ui.select("frequency", "Repeats", frequencies.items(), form, errors) }}
+    {{ ui.input("start_date", "First date", form, errors, type="date", required=True, hint="Later dates follow from this one, e.g. the 25th of every month.") }}
+    {{ ui.input("end_date", "End date", form, errors, type="date", hint="For fixed-term items like a loan.") }}
+    {{ ui.textarea("notes", "Notes", form, errors, rows=2) }}
+    <label class="check full"><input type="checkbox" name="is_paused" value="1" {% if form.get('is_paused') %}checked{% endif %}> Paused</label>
+  </div>
+  {% if item %}<p class="small muted mt">Next occurrence: {{ item.next_date|nicedate }}. Changing the first date or frequency restarts the schedule; transactions already posted are kept.</p>{% endif %}
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">{{ "Save changes" if item else "Add recurring item" }}</button>
+    <a class="btn btn-ghost" href="{{ url_for('recurring.index') }}">Cancel</a>
+  </div>
+</form>
+{% if item %}
+<form class="mt" method="post" action="{{ url_for('recurring.delete', item_id=item.id) }}" data-confirm="Delete “{{ item.description }}”? Transactions it already created are kept." data-confirm-title="Delete recurring item">
+  {{ ui.csrf() }}<button class="btn btn-danger" type="submit">{{ ui.icon("trash") }}Delete</button>
+</form>
+{% endif %}
+{% endif %}
+{% endblock %}

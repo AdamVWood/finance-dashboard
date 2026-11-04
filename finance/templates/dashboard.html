@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui with context %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+{% set cur = summary.current %}
+{% set prev = summary.previous %}
+{% set nw = summary.net_worth %}
+
+<div class="page-head">
+  <div>
+    <h1>{% if settings.owner_name %}Hi {{ settings.owner_name }}{% else %}Your finances{% endif %}</h1>
+    <p>{{ periods[period] }} · {{ summary.start|nicedate("%d %b") }} – {{ summary.end|nicedate }}</p>
+  </div>
+  <nav class="segmented" aria-label="Period">
+    {% for key, label in periods.items() %}
+    <a href="{{ url_for('dashboard.index', period=key) }}" class="{{ 'active' if key == period }}" {% if key == period %}aria-current="true"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </nav>
+</div>
+
+{% if not has_data %}
+<section class="card mb">
+  <div class="card-head"><h2>Get started</h2><span class="sub">Three steps to a working dashboard</span></div>
+  <ol class="steps">
+    <li class="{{ 'done' if accounts }}"><div class="grow"><strong>Add your accounts</strong><div class="small muted">Chequing, savings, cash, credit cards and loans, with their current balances.</div></div>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('accounts.create') }}">Add account</a></li>
+    <li><div class="grow"><strong>Record transactions</strong><div class="small muted">Add them one at a time, set up recurring bills and salary, or import a CSV from your bank.</div></div>
+      <a class="btn btn-sm" href="{{ url_for('transactions.import_csv') }}">Import CSV</a></li>
+    <li><div class="grow"><strong>Set budgets and goals</strong><div class="small muted">Monthly limits per category and savings targets with deadlines.</div></div>
+      <a class="btn btn-sm" href="{{ url_for('budgets.index') }}">Budgets</a></li>
+  </ol>
+  <form method="post" action="{{ url_for('settings.load_demo') }}" class="row mt">
+    {{ ui.csrf() }}
+    <span class="small muted">Just exploring?</span>
+    <button class="btn btn-sm btn-ghost" type="submit">Load 12 months of sample data</button>
+  </form>
+</section>
+{% endif %}
+
+{% if due %}
+<div class="alert warning mb">
+  {{ ui.icon("clock") }}
+  <div class="grow"><strong>{{ due|length }} recurring transaction{{ "s" if due|length != 1 }} due.</strong>
+    {% for item, when in due[:3] %}{{ item.description }} ({{ when|nicedate("%d %b") }}){{ ", " if not loop.last }}{% endfor %}{% if due|length > 3 %} and more{% endif %}.</div>
+  <form method="post" action="{{ url_for('recurring.post_due') }}" class="inline-form">
+    {{ ui.csrf() }}<input type="hidden" name="next" value="{{ url_for('dashboard.index') }}">
+    <button class="btn btn-sm" type="submit">Post now</button>
+  </form>
+  <a class="btn btn-sm btn-ghost" href="{{ url_for('recurring.index') }}">Review</a>
+</div>
+{% endif %}
+
+<section class="kpis" aria-label="Key figures">
+  <div class="card kpi">
+    <div class="label"><span class="dot" style="background:var(--series-income)"></span>Income</div>
+    <div class="value">{{ cur.income_cents|money(decimals=False) }}</div>
+    <div class="meta">{{ ui.delta(cur.income_cents, prev.income_cents if prev else None) }} vs previous</div>
+  </div>
+  <div class="card kpi">
+    <div class="label"><span class="dot" style="background:var(--series-expense)"></span>Expenses</div>
+    <div class="value">{{ cur.expense_cents|money(decimals=False) }}</div>
+    <div class="meta">{{ ui.delta(cur.expense_cents, prev.expense_cents if prev else None, invert=True) }} vs previous</div>
+  </div>
+  <div class="card kpi">
+    <div class="label">Net savings</div>
+    <div class="value {{ 'neg' if cur.net_cents < 0 }}">{{ cur.net_cents|money(decimals=False) }}</div>
+    <div class="meta">Income minus expenses</div>
+  </div>
+  <div class="card kpi">
+    <div class="label">Savings rate</div>
+    <div class="value {{ 'neg' if cur.savings_rate is not none and cur.savings_rate < 0 }}">{{ cur.savings_rate|pct }}</div>
+    <div class="meta">{% if prev and prev.savings_rate is not none and cur.savings_rate is not none %}{{ ui.delta(cur.savings_rate, prev.savings_rate, as_pct=True) }} vs previous{% else %}Share of income kept{% endif %}</div>
+  </div>
+  <a class="card kpi hero" href="{{ url_for('accounts.index') }}" style="text-decoration:none">
+    <div class="label">Net worth</div>
+    <div class="value">{{ nw.net_worth_cents|money(decimals=False) }}</div>
+    <div class="meta">{{ summary.net_worth_change_cents|money(sign=True, decimals=False) }} over the last month</div>
+  </a>
+</section>
+
+<div class="grid grid-main">
+  <section class="card">
+    <div class="card-head"><h2>Income vs expenses <span class="sub">· last 12 months</span></h2><a href="{{ url_for('reports.index') }}">Reports</a></div>
+    <div class="chart" data-chart="bars" data-source="chart-data" data-path="monthly" data-height="270"
+         data-series='[{"key":"income","label":"Income","color":"--series-income"},{"key":"expenses","label":"Expenses","color":"--series-expense"}]'
+         aria-label="Monthly income and expenses for the last 12 months"
+         data-empty="Add income and expense transactions to see this chart."></div>
+    <details class="table-view"><summary>Show as table</summary>
+      <div class="table-wrap"><table class="data compact"><thead><tr><th>Month</th><th class="num">Income</th><th class="num">Expenses</th><th class="num">Net</th></tr></thead>
+      <tbody>{% for m in monthly %}<tr><td>{{ m.label }}</td><td class="num">{{ m.income_cents|money }}</td><td class="num">{{ m.expense_cents|money }}</td><td class="num">{{ m.net_cents|money }}</td></tr>{% endfor %}</tbody></table></div>
+    </details>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Spending by category</h2><span class="sub">{{ periods[period] }}</span></div>
+    <div class="chart" data-chart="donut" data-source="chart-data" data-path="categories" data-legend="cat-legend"
+         data-height="190" data-center="Spent" aria-label="Spending by category" data-empty="No spending recorded in this period." style="min-height:190px; max-width:190px; margin:0 auto"></div>
+    <ul class="donut-legend mt" id="cat-legend"></ul>
+  </section>
+</div>
+
+<div class="grid grid-main mt">
+  <section class="card">
+    <div class="card-head"><h2>Net worth trend <span class="sub">· month end</span></h2><a href="{{ url_for('accounts.index') }}">Accounts</a></div>
+    <div class="chart" data-chart="line" data-source="chart-data" data-path="net_worth" data-height="220" data-area
+         data-series='[{"key":"value","label":"Net worth","color":"--s1"}]' aria-label="Net worth over the last 12 months"
+         data-empty="Add accounts with balances to track your net worth."></div>
+    <div class="grid grid-3 mt">
+      <div class="stat-row" style="border:0;display:block"><div class="small muted">Assets</div><strong>{{ nw.assets_cents|money(decimals=False) }}</strong></div>
+      <div class="stat-row" style="border:0;display:block"><div class="small muted">Liabilities</div><strong>{{ nw.liabilities_cents|money(decimals=False) }}</strong></div>
+      <div class="stat-row" style="border:0;display:block"><div class="small muted">Investments</div><strong>{{ nw.investments_cents|money(decimals=False) }}</strong></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Budget · {{ ("%04d-%02d-01"|format(budget.year, budget.month))|nicedate("%B") }}</h2><a href="{{ url_for('budgets.index') }}">Manage</a></div>
+    {% if budget.has_budgets %}
+      <div class="row between small mb"><span class="muted">{{ budget.spent_budgeted_cents|money(decimals=False) }} of {{ budget.total_budget_cents|money(decimals=False) }}</span>
+        <strong class="{{ 'neg' if budget.remaining_cents < 0 }}">{{ budget.remaining_cents|abs|money(decimals=False) }} {{ "over" if budget.remaining_cents < 0 else "left" }}</strong></div>
+      {{ ui.progress(budget.used_pct, "over" if (budget.used_pct or 0) > 100 else ("near" if (budget.used_pct or 0) >= 80 else "ok"), lg=True, label="Budget used") }}
+      <div class="mt">
+      {% for line in budget_top %}
+        <div class="budget-line">
+          <div class="top"><span class="name"><span class="dot" style="background:{{ line.color or 'var(--s-other)' }}"></span>{{ line.name }}</span>
+            <span class="tnum small">{{ line.spent_cents|money(decimals=False) }} / {{ line.budget_cents|money(decimals=False) }}</span></div>
+          {{ ui.progress(line.used_pct, line.status, label=line.name ~ " budget used") }}
+        </div>
+      {% endfor %}
+      </div>
+      {% if budget.over %}<p class="small neg mt">Over budget: {{ budget.over|map(attribute="name")|join(", ") }}</p>{% endif %}
+    {% else %}
+      {{ ui.empty("No budgets this month", "Set monthly limits for your spending categories and track them here.", url_for('budgets.index'), "Set budgets", "budgets") }}
+    {% endif %}
+  </section>
+</div>
+
+<div class="grid grid-3 mt">
+  <section class="card">
+    <div class="card-head"><h2>Savings goals</h2><a href="{{ url_for('goals.index') }}">All goals</a></div>
+    {% if goals %}
+      {% for g in goals %}
+      <div class="budget-line">
+        <div class="top"><a class="name" href="{{ url_for('goals.detail', goal_id=g.id) }}">{{ g.name }}</a><span class="tnum small">{{ g.progress_pct|pct }}</span></div>
+        {{ ui.progress(g.progress_pct, g.status, marker=g.expected_pct, label=g.name ~ " progress") }}
+        <div class="row between small mt" style="margin-top:6px"><span class="muted">{{ g.saved_cents|money(decimals=False) }} of {{ g.target_cents|money(decimals=False) }}</span>{{ ui.status(g.status, g.status_label) }}</div>
+      </div>
+      {% endfor %}
+    {% else %}
+      {{ ui.empty("No savings goals", "Set a target like an emergency fund and track your progress.", url_for('goals.create'), "New goal", "goals") }}
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Portfolio</h2><a href="{{ url_for('investments.index') }}">Holdings</a></div>
+    {% if portfolio.count %}
+      <div class="kpi" style="padding:0">
+        <div class="value">{{ portfolio.value_cents|money(decimals=False) }}</div>
+        <div class="meta"><span class="{{ 'pos' if portfolio.gain_cents >= 0 else 'neg' }}">{{ portfolio.gain_cents|money(sign=True, decimals=False) }} ({{ portfolio.return_pct|pct(1, sign=True) }})</span> on {{ portfolio.cost_cents|money(decimals=False) }} invested</div>
+      </div>
+      <div class="mt">
+        {% for a in portfolio.allocation[:5] %}
+        <div class="stat-row"><span>{{ a.label }}</span><span class="tnum">{{ a.pct|pct(1) }} · <strong>{{ a.value_cents|money(decimals=False) }}</strong></span></div>
+        {% endfor %}
+      </div>
+      {% if portfolio.stale_count %}<p class="small muted mt">{{ portfolio.stale_count }} holding(s) have no current price yet - <a href="{{ url_for('investments.prices') }}">update prices</a>.</p>{% endif %}
+    {% else %}
+      {{ ui.empty("No investments", "Track stocks, ETFs, bonds and crypto with their gains and allocation.", url_for('investments.create'), "Add investment", "investments") }}
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Accounts</h2><a href="{{ url_for('accounts.index') }}">All</a></div>
+    {% if accounts %}
+    <ul class="list">
+      {% for a in accounts[:6] %}
+      <li><div class="grow"><a class="title" href="{{ url_for('accounts.detail', account_id=a.id) }}">{{ a.name }}</a><div class="sub">{{ a.type_label }}</div></div>
+        <span class="tnum {{ 'neg' if a.balance_cents < 0 }}">{{ a.balance_cents|money }}</span></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+      {{ ui.empty("No accounts yet", "Accounts hold your balances and make net worth work.", url_for('accounts.create'), "Add account", "accounts") }}
+    {% endif %}
+  </section>
+</div>
+
+<div class="grid grid-main mt">
+  <section class="card flush">
+    <div class="card-head"><h2>Recent transactions</h2><a href="{{ url_for('transactions.index') }}">View all</a></div>
+    {% if recent %}
+    <div class="table-wrap mt"><table class="data">
+      <tbody>
+      {% for t in recent %}
+      <tr>
+        <td class="hide-sm faint tnum" style="width:90px">{{ t.date|nicedate("%d %b") }}</td>
+        <td class="desc"><a href="{{ url_for('transactions.edit', txn_id=t.id) }}" style="color:inherit">{{ t.description }}</a>
+          <span class="sub">{% if t.type == 'transfer' %}{{ t.account_name }} → {{ t.to_account_name }}{% else %}{{ t.category_name }} · {{ t.account_name }}{% endif %}</span></td>
+        <td class="num">{{ ui.amount(t) }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}
+      {{ ui.empty("No transactions yet", "Add your first transaction to start tracking your finances.", url_for('transactions.create'), "Add transaction", "transactions") }}
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Coming up</h2><a href="{{ url_for('recurring.index') }}">Recurring</a></div>
+    {% if upcoming %}
+    <ul class="list">
+      {% for u in upcoming %}
+      <li><div class="grow"><div class="title">{{ u.description }}</div><div class="sub">{{ u.date|nicedate("%a %d %b") }} · {{ u.frequency_label }}</div></div>
+        {{ ui.amount(u) }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+      <p class="muted small">Nothing scheduled in the next two weeks. Add salary, rent and subscriptions as <a href="{{ url_for('recurring.create') }}">recurring items</a> to see them here.</p>
+    {% endif %}
+  </section>
+</div>
+
+<script type="application/json" id="chart-data">{{ chart_data|tojson }}</script>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% import "partials/macros.html" as ui with context %}
+{% block title %}{{ goal.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div><div class="crumbs"><a href="{{ url_for('goals.index') }}">Savings goals</a> /</div>
+    <h1>{{ goal.name }} {{ ui.status(goal.status, goal.status_label) }}</h1>
+    <p>Started {{ goal.start_date|nicedate }}{% if goal.deadline %} · deadline {{ goal.deadline|nicedate }}{% endif %}</p></div>
+  <div class="actions"><a class="btn" href="{{ url_for('goals.edit', goal_id=goal.id) }}">{{ ui.icon("edit") }}Edit goal</a></div>
+</div>
+
+<section class="kpis">
+  <div class="card kpi"><div class="label">Saved</div><div class="value">{{ goal.saved_cents|money }}</div><div class="meta">{{ goal.progress_pct|pct(1) }} of {{ goal.target_cents|money(decimals=False) }}</div></div>
+  <div class="card kpi"><div class="label">Remaining</div><div class="value">{{ goal.remaining_cents|money }}</div></div>
+  <div class="card kpi"><div class="label">Needed per month</div><div class="value">{{ goal.required_monthly_cents|money if goal.required_monthly_cents else "—" }}</div>
+    <div class="meta">{% if goal.months_left %}{{ goal.months_left }} month{{ "s" if goal.months_left != 1 }} left{% elif not goal.deadline %}No deadline set{% endif %}</div></div>
+  <div class="card kpi"><div class="label">Recent pace</div><div class="value">{{ goal.monthly_pace_cents|money(decimals=False) }}<span class="small muted">/mo</span></div>
+    <div class="meta">{% if goal.projected_date and goal.status != 'done' %}Done around {{ goal.projected_date|nicedate("%b %Y") }}{% else %}Average of the last 3 months{% endif %}</div></div>
+</section>
+
+<div class="grid grid-main">
+  <section class="card">
+    <div class="card-head"><h2>Progress over time</h2></div>
+    {{ ui.progress(goal.progress_pct, goal.status, marker=goal.expected_pct, lg=True, label="Goal progress") }}
+    <div class="chart mt" data-chart="line" data-source="goal-data" data-path="points" data-height="230" data-area data-zero
+         data-target="{{ chart.target }}" data-series='[{"key":"value","label":"Saved","color":"--s3"}]'
+         aria-label="Amount saved over time" data-empty="Add at least two contributions to see a trend."></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Add or withdraw</h2></div>
+    <form method="post" action="{{ url_for('goals.contribute', goal_id=goal.id) }}" novalidate>
+      {{ ui.csrf() }}
+      <div class="stack">
+        <div class="segmented" role="radiogroup" aria-label="Direction">
+          <label><input type="radio" name="direction" value="add" {% if form.get('direction', 'add') == 'add' %}checked{% endif %}><span>Add money</span></label>
+          <label><input type="radio" name="direction" value="withdraw" {% if form.get('direction') == 'withdraw' %}checked{% endif %}><span>Withdraw</span></label>
+        </div>
+        {{ ui.money("amount", "Amount", form, errors) }}
+        {{ ui.input("date", "Date", form, errors, type="date", required=True) }}
+        {{ ui.input("note", "Note", form, errors, attrs='maxlength="200"') }}
+        <button class="btn btn-primary" type="submit">Save</button>
+      </div>
+    </form>
+  </section>
+</div>
+
+<section class="card flush mt">
+  <div class="card-head"><h2>History</h2></div>
+  {% if contributions %}
+  <div class="table-wrap mt"><table class="data">
+    <thead><tr><th>Date</th><th>Note</th><th class="num">Amount</th><th></th></tr></thead>
+    <tbody>
+    {% for c in contributions %}
+    <tr><td class="tnum">{{ c.date|nicedate }}</td><td class="muted">{{ c.note or "—" }}</td>
+      <td class="num"><span class="{{ 'pos' if c.amount_cents > 0 else 'neg' }}">{{ c.amount_cents|money(sign=True) }}</span></td>
+      <td class="actions"><form class="inline-form" method="post" action="{{ url_for('goals.delete_contribution', contribution_id=c.id) }}" data-confirm="Remove this entry of {{ c.amount_cents|money }}?" data-confirm-ok="Remove" data-confirm-title="Remove entry">
+        {{ ui.csrf() }}<button class="btn btn-ghost btn-sm icon-btn" type="submit" title="Remove">{{ ui.icon("trash") }}<span class="visually-hidden">Remove</span></button></form></td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}{{ ui.empty("Nothing saved yet", "Record money as you set it aside for this goal.") }}{% endif %}
+</section>
+{% if goal.notes %}<p class="muted mt">{{ goal.notes }}</p>{% endif %}
+<script type="application/json" id="goal-data">{{ chart|tojson }}</script>
+{% endblock %}
